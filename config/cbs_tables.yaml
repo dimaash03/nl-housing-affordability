@@ -1,0 +1,169 @@
+# CBS StatLine tables used by the NL Housing Affordability project.
+# Every table ID, column key and dimension key below was verified against the
+# CBS OData API (opendata.cbs.nl) on 2026-11-14. See docs/cbs_tables_research.md.
+#
+# Notes for the ingestion script:
+# - Base URLs:
+#     api:  https://opendata.cbs.nl/ODataApi/odata/<id>/   (max 10,000 rows per request, no $skip)
+#     feed: https://opendata.cbs.nl/ODataFeed/odata/<id>/  (paged via odata.nextLink; use for bulk pulls)
+#   The python package `cbsodata` wraps the feed endpoint.
+# - Dimension keys can be right-padded with spaces (e.g. CPI category 'T001112  ',
+#   region keys like 'CR04  ' or 'GM0363    ' in some tables). Always .strip() keys after download.
+#   Filters below were tested with exactly the quoted strings.
+# - Period keys look like '2024JJ00' (JJ = yearly, MM = monthly, KW = quarterly).
+# - Status: all choices are "proposed — needs owner approval" (see docs/DECISIONS_LOG.md).
+
+project:
+  analysis_years: [2011, 2025]          # 2025 income is preliminary ("Voorlopig")
+  target_municipal_boundaries: 2026     # municipal division of 1 January 2026 (342 municipalities)
+  randstad_g4: [GM0363, GM0599, GM0518, GM0344]  # Amsterdam, Rotterdam, 's-Gravenhage, Utrecht
+
+tables:
+  - id: 83625NED
+    purpose: house_prices
+    title: "Bestaande koopwoningen; gemiddelde verkoopprijzen, regio"
+    title_en: "Existing own homes; average purchase prices, region"
+    endpoint: feed            # ~23k rows in total; >10k limit of the api endpoint
+    periods: "1995-2025 (yearly)"
+    regional_level: [NL01, LD, PV, GM]
+    boundaries: "boundaries of the reporting year (historical GM codes; needs harmonisation)"
+    filters: "Perioden ge '2011JJ00'"
+    columns:
+      - RegioS
+      - Perioden
+      - GemiddeldeVerkoopprijs_1      # average sale price, euro
+
+  - id: 86380NED
+    purpose: household_income
+    title: "Inkomen van huishoudens; huishoudenskenmerken, regio (indeling 2026)"
+    title_en: "Income of households; household characteristics, region (2026 municipal division)"
+    endpoint: feed
+    periods: "2011-2025 (yearly; 2025 preliminary)"
+    regional_level: [NL01, LD, PV, CR, AM, GM]
+    boundaries: "municipal division of 1 January 2026 for all years (already harmonised)"
+    filters: "Populatie eq '3000870' and (KenmerkenVanHuishoudens eq '1050010' or KenmerkenVanHuishoudens eq '1014800')"
+    dimension_values:
+      Populatie:
+        "3000870": "Particuliere huishoudens excl. studenten (private households excl. student households)"
+        "1050010": "Particuliere huishoudens incl. studenten (alternative, not loaded)"
+      KenmerkenVanHuishoudens:
+        "1050010": "Particuliere huishoudens (all private households)"
+        "1014800": "Woningbezit: eigen woning (owner-occupier households)"
+    columns:
+      - Populatie
+      - KenmerkenVanHuishoudens
+      - RegioS
+      - Perioden
+      - ParticuliereHuishoudens_1             # households, x 1 000
+      - GemiddeldGestandaardiseerdInkomen_3   # mean standardised income, 1 000 euro
+      - MediaanGestandaardiseerdInkomen_4     # median standardised income, 1 000 euro
+      - GemiddeldBesteedbaarInkomen_5         # mean disposable income, 1 000 euro
+      - MediaanBesteedbaarInkomen_6           # median disposable income, 1 000 euro
+
+  - id: 70072ned
+    purpose: population_households_housing_stock
+    title: "Regionale kerncijfers Nederland"
+    title_en: "Regional key figures Netherlands (translation)"
+    endpoint: feed
+    periods: "1995-2026 (yearly; not every column is filled for every year)"
+    regional_level: [NL01, LD, PV, CR, GM]
+    boundaries: "boundaries of the reporting year (historical GM codes; needs harmonisation)"
+    filters: "Perioden ge '2011JJ00'"
+    columns:
+      - RegioS
+      - Perioden
+      - TotaleBevolking_1                  # population on 1 January, count
+      - TotaalParticuliereHuishoudens_51   # private households, count (filled up to 2025)
+      - GemiddeldeHuishoudensgrootte_58    # persons per household
+      - Woningvoorraad_59                  # dwelling stock, count (filled up to 2025)
+      - Koopwoningen_64                    # share of owner-occupied dwellings, %
+      - GemiddeldeWOZWaardeVanWoningen_63  # mean WOZ (tax) value, 1 000 euro (2026 filled)
+
+  - id: 86141NED
+    purpose: cpi
+    title: "Consumentenprijzen; CPI 2025=100, index en mutaties"
+    title_en: "Consumer prices; CPI 2025=100, index and rates of change"
+    endpoint: api
+    periods: "2009-12 to 2026-10 (monthly) plus yearly averages 2010-2025"
+    regional_level: [national]
+    filters: "Bestedingscategorieen eq 'T001112  ' and substringof('JJ',Perioden)"
+    columns:
+      - Bestedingscategorieen
+      - Perioden
+      - CPI_1               # index, 2025=100
+      - JaarmutatieCPI_5    # year-on-year change, %
+
+  - id: 86247NED
+    purpose: municipality_reference
+    title: "Gebieden in Nederland 2026"
+    title_en: "Regions in the Netherlands 2026 (translation)"
+    endpoint: api
+    periods: "2026 (snapshot)"
+    regional_level: [GM]
+    boundaries: "municipal division of 1 January 2026 (342 municipalities)"
+    filters: null
+    columns:
+      - RegioS
+      - Code_1          # municipality code GMxxxx
+      - Naam_2          # municipality name
+      - Code_10         # COROP code (CRxx)
+      - Naam_11         # COROP name
+      - Code_26         # landsdeel code (LDxx)
+      - Naam_27         # landsdeel name
+      - Code_28         # province code (PVxx)
+      - Naam_29         # province name
+      - Code_52         # municipality size class code
+      - Omschrijving_53 # municipality size class
+      - Code_54         # urbanity class code (1 = very strongly urban ... 5 = not urban)
+      - Omschrijving_55 # urbanity class
+      - Inwonertal_56   # population
+
+  - id: 70739ned
+    purpose: municipal_reorganisations
+    title: "Gebieden; overzicht vanaf 1830"
+    title_en: "Regions; overview since 1830 (translation)"
+    endpoint: feed
+    periods: "status 1 January 1830 to 1 January 2026"
+    regional_level: [LD, PV, CR, GM]
+    filters: null
+    columns:
+      - RegioS
+      - Begindatum_1
+      - Einddatum_2
+      - GebiedsOfGemeentecode_3
+      - Provincie_4
+    # The successor mapping is NOT in the data columns: it is in the free-text
+    # `Description` field of the RegioS dimension endpoint (70739ned/RegioS).
+    # Parse "Opgeheven per DD-MM-YYYY, overgegaan naar: - <name> (GMxxxx), ... <ha> hectare met <n> woningen en <n> inwoners"
+    # and "Naamswijziging per DD-MM-YYYY, nieuwe naam: <name> (GMxxxx)". See docs/cbs_tables_research.md section 5.
+    dimension_endpoints:
+      - RegioS   # fields: Key, Title, Description
+
+# Optional / reference tables (verified, not required for the core metrics)
+optional_tables:
+  - id: 85792NED
+    purpose: house_price_index_and_transactions_g4
+    title: "Bestaande koopwoningen; verkoopprijzen, prijsindex 2020=100, regio"
+    note: "Quality-adjusted price index + number of transactions; only NL, LD, PV and the G4 cities (21 regions), quarterly."
+    columns: [RegioS, Perioden, PrijsindexVerkoopprijzen_1, VerkochteWoningen_4, GemiddeldeVerkoopprijs_7]
+  - id: 71905ned
+    purpose: cpi_long_run
+    title: "Consumentenprijzen; prijsindex 1900=100"
+    note: "Yearly CPI 1900-2025; fallback if 86141NED changes base year."
+    columns: [Perioden, CPI_1, JaarmutatieCPI_2]
+  - id: 86438NED
+    purpose: municipality_reference_next_year
+    title: "Gebieden in Nederland 2027"
+    note: "341 municipalities; GM1696 Wijdemeren is absent compared with 2026."
+
+# External sources (documented only, not ingested from this environment)
+external_sources:
+  - id: pdok_cbs_gebiedsindelingen
+    purpose: municipality_boundaries
+    url: "https://api.pdok.nl/cbs/gebiedsindelingen/ogc/v1/collections/gemeente_gegeneraliseerd/items?f=json&jaarcode=2026"
+    format: "OGC API Features (GeoJSON / JSON-FG); CRS84, EPSG:28992, EPSG:3857, EPSG:4258"
+    note: "Years 2016+; 1995-2015 in .../cbs/gebiedsindelingen-historisch/... . Queryable: jaarcode. Not verified from shell (host not reachable)."
+  - id: dnb_mortgage_rates
+    purpose: mortgage_interest_rates
+    url: "https://www.dnb.nl/statistieken/dashboards/woninghypotheken/hypotheekrentes-banken/"
+    note: "Bank interest rates on new residential mortgages by rate-fixation period. Exact DNB table/series ID and download URL NOT verified."
