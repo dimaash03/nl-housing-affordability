@@ -1,6 +1,8 @@
 # Harmonisation to the municipal division of 1 January 2026
 
-Decisions: D-006 (target = 342 municipalities of 2026), D-007 (method and weights), D-011 (`70072ned`).
+Decisions: D-006 (target = 342 municipalities of 2026), D-007 (method and weights), D-011 (`70072ned`),
+D-022 (mid-year rename), D-023 (pseudo-municipalities), D-024 (boundary corrections), D-025 (split weights).
+These four were proposed in PR #4 as D-018…D-021 and renumbered (stage-2 QA, H-2).
 Code: [`src/nl_housing/harmonise.py`](../src/nl_housing/harmonise.py), [`src/nl_housing/weight_sensitivity.py`](../src/nl_housing/weight_sensitivity.py).
 Output: [`data/reference/municipality_mapping_2026.csv`](../data/reference/municipality_mapping_2026.csv) (committed, 456 rows).
 All figures below were produced by these two modules on CBS data downloaded on 2026-11-22.
@@ -33,23 +35,78 @@ Counts by `old_code`: 342 unchanged, 95 merge, 6 split (17 rows), 2 rename.
 
 ### How to use it (pattern for staging/marts)
 
-```sql
--- additive variables (population, households, dwellings)
-SELECT m.new_code_2026, k.year, SUM(k.population * m.weight) AS population
-FROM stg_key_figures k JOIN reference.municipality_mapping_2026 m ON m.old_code = k.municipality_code
-GROUP BY ALL;
+Column contract: `old_code` ↔ staging `region_code` (historical code, reporting-year boundaries);
+`new_code_2026` ↔ `stg_cbs__municipalities_2026.municipality_code` ↔ geo `statcode`. All are trimmed `GMxxxx` strings.
+`make load` loads the committed CSV into `reference.municipality_mapping_2026`.
 
--- average price: weighted mean, weight = owner-occupied stock of the old code x mapping weight (D-007)
-SELECT m.new_code_2026, p.year,
-       SUM(p.avg_sale_price_eur * k.owner_stock * m.weight) / SUM(k.owner_stock * m.weight) AS avg_sale_price_eur
-FROM stg_prices p
-JOIN stg_key_figures k USING (municipality_code, year)
-JOIN reference.municipality_mapping_2026 m ON m.old_code = p.municipality_code
-GROUP BY ALL;
+Additive variables (population, households, dwellings):
+
+```sql
+select m.new_code_2026, k.year, sum(k.households_count * m.weight) as households_count
+from staging.stg_cbs__regional_key_figures as k
+join reference.municipality_mapping_2026 as m on m.old_code = k.region_code
+where k.region_type = 'GM'
+group by all
 ```
 
-The only exception to this pattern is De Fryske Marren in 2015 (section 5.2). `weight_sensitivity.harmonised_prices()`
-is the Python reference implementation and can be used to test the SQL.
+Average price (D-007: weighted mean, weight = owner-occupied stock of the old code × mapping weight), with the one
+special case of section 5.2 (D-022): when a renamed code and its successor both have a price in the same year
+(only GM1921/GM1940 in 2015), they are one territorial unit: equal-weight mean of the two prices, and the weight
+that exists (GM1921's owner stock, as `70072ned` has no 2015 row for GM1940).
+
+<!-- harmonised-price-sql: this block is executed by tests/test_harmonisation_doc_sql.py -->
+```sql
+with prices as (
+    select p.region_code, p.year, p.avg_sale_price_eur, k.owner_occupied_stock
+    from staging.stg_cbs__house_prices as p
+    left join staging.stg_cbs__regional_key_figures as k using (region_code, year)
+    where p.region_type = 'GM'
+      and p.region_code not in ('GM0998', 'GM0999')          -- pseudo-municipalities (D-023)
+),
+
+renames as (
+    select old_code, new_code_2026 from reference.municipality_mapping_2026 where change_type = 'rename'
+),
+
+units as (   -- a renamed code priced in the same year as its successor joins the successor's unit (D-022)
+    select
+        coalesce(r.new_code_2026, p.region_code) as unit_code,
+        p.year,
+        p.avg_sale_price_eur,
+        p.owner_occupied_stock
+    from prices as p
+    left join renames as r
+        on r.old_code = p.region_code
+       and exists (select 1 from prices as s where s.region_code = r.new_code_2026 and s.year = p.year)
+),
+
+unit_values as (
+    select unit_code, year,
+           avg(avg_sale_price_eur)   as avg_sale_price_eur,      -- equal weight within the unit
+           avg(owner_occupied_stock) as owner_occupied_stock      -- mean of the non-missing weights
+    from units
+    group by unit_code, year
+)
+
+select
+    m.new_code_2026,
+    u.year,
+    sum(u.avg_sale_price_eur * u.owner_occupied_stock * m.weight)
+        / sum(u.owner_occupied_stock * m.weight) as avg_sale_price_eur,
+    count(distinct u.unit_code)                   as n_source_codes
+from unit_values as u
+join reference.municipality_mapping_2026 as m on m.old_code = u.unit_code
+group by all
+order by m.new_code_2026, u.year
+```
+
+Without the `units` step (QA H-4), the query silently gives GM1940 2015 = 203 762 instead of 205 512: GM1940's own
+2015 price has no weight, so only GM1921's price counts. With it, the query equals the Python reference
+`weight_sensitivity.harmonised_prices()` for all 5 130 municipality-years 2011–2025 (checked on the 2026-11-22
+download, max abs difference < 1e-6 euro). `tests/test_harmonisation_doc_sql.py` runs this exact block offline on a
+small synthetic database (including a mid-year rename) and compares it with the Python reference.
+`assert_prices_have_harmonisation_weight.sql` fails if any other priced municipality-year lacks a weight, so the
+`left join` cannot hide a new gap.
 
 ## 3. Method
 
@@ -210,6 +267,10 @@ The research prototype values for Amsterdam are reproduced to the euro.
 - **Weights are proxies.** CBS publishes no transaction counts per municipality. Owner stock is the closest concept
   (section 6 quantifies the alternatives).
 - **Mid-year changes** (De Fryske Marren 2015, Weesp 2022): see section 5.
+- **Owner-share precision from 2021.** `Koopwoningen_64` is published in whole percentages from 2021 (one decimal
+  before; DATA_DICTIONARY 2.3), so the owner-stock weight is coarser by up to ±0.5 pp of the dwelling stock. This
+  touches only the harmonised municipality-years of 2021 (6) and 2022 (2), including Amsterdam + Weesp in 2022; from
+  2023 no municipality needs harmonisation.
 - **2027 division**: `86438NED` (341 municipalities) lacks GM1696 Wijdemeren; its successor is not yet in `70739ned`.
   Regenerate the mapping once CBS publishes income in the 2027 division (D-006).
 - Cross-check against the CBS xlsx "Gemeenten en COROP vanaf 1981" (D-007 alternative) is still open: www.cbs.nl
@@ -218,10 +279,13 @@ The research prototype values for Amsterdam are reproduced to the euro.
 ## 8. Regenerate
 
 ```bash
-python -m nl_housing.ingest --table 70739ned   # + 83625NED, 70072ned, 86247NED
-python -m nl_housing.harmonise                 # writes the CSV, logs the section-4 figures
-python -m nl_housing.harmonise --load-duckdb   # + reference.municipality_mapping_2026 in data/nl_housing.duckdb
+make ingest                                    # needs 70739ned, 83625NED, 70072ned, 86247NED
+make harmonise                                 # rebuild the CSV from data/raw/ + load it (review the diff, commit)
+make load                                      # loads data/raw/ and the COMMITTED CSV (harmonise --load-only)
 python -m nl_housing.weight_sensitivity        # section-6 tables (Markdown on stdout)
 ```
+
+`make check` runs `assert_mapping_covers_staging.sql`: it fails if the committed CSV no longer fits the staging
+data (a priced code without a mapping row, an unknown target, an uncovered 2026 municipality, weights ≠ 1).
 
 The CSV is sorted by `old_code, new_code_2026` with fixed precision, so a CBS update shows up as a readable diff.
