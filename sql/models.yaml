@@ -11,5 +11,10 @@ staging:
   # Staging models read only from `raw` and are independent of each other.
   - stg_cbs__house_prices
   - stg_cbs__household_income
+  - stg_cbs__regional_key_figures
+  - stg_cbs__cpi
+  - stg_cbs__municipalities_2026
+  - stg_cbs__house_price_index
+  - stg_cbs__regions_history
 
 marts: []
