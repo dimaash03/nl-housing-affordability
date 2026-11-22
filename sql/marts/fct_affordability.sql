@@ -4,14 +4,17 @@
 --          staging.stg_cbs__household_income      (86380NED, already in the 2026 division)
 --          staging.stg_cbs__cpi                   (86141NED, yearly CPI 2025 = 100)
 --          staging.stg_cbs__municipalities_2026   (86247NED, the 342 municipalities of 1 January 2026)
---          data/reference/municipality_mapping_2026.csv (historical GM code -> 2026 code, from PR #4)
+--          reference.municipality_mapping_2026     (historical GM code -> 2026 code; committed CSV,
+--                                                   loaded by `make load`, PR #4)
 -- Grain:   one row per municipality_code (2026 division) x year, 2011-2025 -> 342 x 15 = 5 130 rows.
--- Filters: GM rows only; analysis window 2011-2025 (D-008).
+-- Filters: GM rows only, pseudo-municipalities GM0998/GM0999 excluded (D-023, proposed);
+--          analysis window 2011-2025 (D-008).
 -- Decisions:
 --   D-003  income = median disposable household income, private households excl. students;
 --          owner-occupier income is the mandatory sensitivity (second PTI).
 --   D-004  PTI = avg sale price / median disposable income (mean/median mix: compare changes and ranks).
 --   D-007  harmonised price = owner-occupied-stock-weighted mean of the historical codes' averages.
+--   D-022  (proposed, PR #4) mid-year rename GM1921/GM1940 2015 = one territorial unit.
 --   D-008  base year for growth = 2011; is_preliminary comes from CBS Perioden.Status, never from the year.
 --   D-009  no imputation; low_reliability (< 5 000 households) and income_missing rows are kept
 --          but get no rank.
@@ -21,23 +24,16 @@
 
 with
 
--- 1. Historical -> 2026 code mapping (committed reference file, 456 rows; weights sum to 1 per old_code).
---    The path is repo-relative; the transform runner resolves it against the repo root.
+-- 1. Historical -> 2026 code mapping (456 rows; weights sum to 1 per old_code). Coverage of every
+--    priced code is enforced by sql/tests/assert_mapping_covers_staging.sql, so the inner join in
+--    prices_harmonised cannot silently drop an unmapped code.
 mapping as (
     select
         old_code,
         new_code_2026,
         weight,
         change_type
-    from read_csv(
-        'data/reference/municipality_mapping_2026.csv',
-        header = true,
-        columns = {
-            'old_code': 'VARCHAR', 'old_name': 'VARCHAR', 'new_code_2026': 'VARCHAR',
-            'new_name_2026': 'VARCHAR', 'weight': 'DOUBLE', 'change_type': 'VARCHAR',
-            'effective_date': 'DATE', 'source': 'VARCHAR', 'resolution_path': 'VARCHAR'
-        }
-    )
+    from reference.municipality_mapping_2026
 ),
 
 -- 2. Every priced municipality-year in its own (historical) boundaries, with the owner-occupied
@@ -53,6 +49,7 @@ prices_raw as (
         on  k.region_code = p.region_code
         and k.year = p.year
     where p.region_type = 'GM'
+      and p.region_code not in ('GM0998', 'GM0999')   -- pseudo-municipalities (D-023)
       and p.year between 2011 and 2025
       and p.avg_sale_price_eur is not null
 ),
