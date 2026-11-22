@@ -73,8 +73,9 @@ def test_fetch_checks_number_matched(features):
 
 
 def test_fetch_checks_content_crs(features):
-    session = RoutedSession(pages(features[:3], page_size=10),
-                            headers={"Content-Crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>"})
+    session = RoutedSession(
+        pages(features[:3], page_size=10), headers={"Content-Crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>"}
+    )
     with pytest.raises(geo.GeoValidationError, match="Content-Crs"):
         geo.fetch_features(2026, session=session, page_size=10)
 
@@ -90,8 +91,14 @@ def test_fetch_rejects_non_feature_collection():
 
 def test_get_json_retries_transient_errors():
     waits: list[float] = []
-    session = ScriptedSession([requests.ConnectionError("reset"), Response(status=503),
-                               Response(status=429, headers={"Retry-After": "7"}), Response({"ok": True})])
+    session = ScriptedSession(
+        [
+            requests.ConnectionError("reset"),
+            Response(status=503),
+            Response(status=429, headers={"Retry-After": "7"}),
+            Response({"ok": True}),
+        ]
+    )
     payload, _ = geo.get_json(session, ITEMS_URL, retries=4, backoff_s=1.0, sleep=waits.append)
     assert payload == {"ok": True} and session.calls == 4
     assert waits == [1.0, 2.0, 7.0]  # exponential backoff, Retry-After honoured
@@ -139,9 +146,24 @@ def test_validate_reports_all_problems_at_once(features):
     with pytest.raises(geo.GeoValidationError) as exc:
         geo.validate_features(bad, 2026)
     message = str(exc.value)
-    for fragment in ("'PV27'", "missing statnaam for: GM0002", "non-polygon geometry for: GM0003",
-                     "jaarcode other than 2026: 2025"):
+    for fragment in (
+        "'PV27'",
+        "missing statnaam for: GM0002",
+        "non-polygon geometry for: GM0003",
+        "jaarcode other than 2026: 2025",
+    ):
         assert fragment in message
+
+
+def test_validate_accepts_jaarcode_as_string(features):
+    """QA G-2: PDOK may return jaarcode as "2026" (string); that must not fail the run."""
+    as_text = copy.deepcopy(features)
+    for f in as_text:
+        f["properties"]["jaarcode"] = "2026"
+    geo.validate_features(as_text, 2026)
+    as_text[5]["properties"]["jaarcode"] = "2025"
+    with pytest.raises(geo.GeoValidationError, match="jaarcode other than 2026: 2025"):
+        geo.validate_features(as_text, 2026)
 
 
 def test_validate_trims_padded_codes(features):

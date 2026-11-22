@@ -86,8 +86,7 @@ LICENCE = "CC BY 4.0"
 LICENCE_URL = "https://creativecommons.org/licenses/by/4.0/"
 DATASET_TITLE = "CBS Gebiedsindelingen 2016 t/m heden"
 DATASET_METADATA_URL = (
-    "https://nationaalgeoregister.nl/geonetwork/srv/dut/catalog.search#/metadata/"
-    "effe1ab0-073d-437c-af13-df5c5e07d6cd"
+    "https://nationaalgeoregister.nl/geonetwork/srv/dut/catalog.search#/metadata/effe1ab0-073d-437c-af13-df5c5e07d6cd"
 )
 ATTRIBUTION = (
     "Municipal boundaries: CBS Gebiedsindelingen (Statistics Netherlands, via PDOK), "
@@ -287,8 +286,14 @@ def fetch_features(
     if number_matched is not None and number_matched != len(features):
         raise GeoValidationError(f"numberMatched={number_matched} but {len(features)} features were downloaded")
     logger.info("Downloaded %d feature(s) for jaarcode=%d in %d page(s)", len(features), year, pages)
-    return Download(features=features, first_url=url, params=params, pages=pages,
-                    number_matched=number_matched, content_crs=content_crs)
+    return Download(
+        features=features,
+        first_url=url,
+        params=params,
+        pages=pages,
+        number_matched=number_matched,
+        content_crs=content_crs,
+    )
 
 
 # --- Validation and property filtering ----------------------------------------
@@ -325,17 +330,24 @@ def validate_features(
     if bad_codes:
         problems.append(f"statcode not shaped like 'GM0363': {', '.join(repr(c) for c in bad_codes[:10])}")
 
-    missing_names = [c for f, c in zip(features, codes) if not str((f.get("properties") or {}).get("statnaam") or "").strip()]
+    pairs = list(zip(features, codes, strict=True))
+    missing_names = [c for f, c in pairs if not str((f.get("properties") or {}).get("statnaam") or "").strip()]
     if missing_names:
         problems.append(f"missing statnaam for: {', '.join(missing_names[:10])}")
 
-    bad_geom = [c for f, c in zip(features, codes) if (f.get("geometry") or {}).get("type") not in POLYGON_TYPES]
+    bad_geom = [c for f, c in pairs if (f.get("geometry") or {}).get("type") not in POLYGON_TYPES]
     if bad_geom:
         problems.append(f"missing or non-polygon geometry for: {', '.join(bad_geom[:10])}")
 
     if year is not None:
-        wrong_year = sorted({str(p.get("jaarcode")) for f in features
-                             if "jaarcode" in (p := f.get("properties") or {}) and p.get("jaarcode") != year})
+        # Compare as text: the API may return jaarcode as a number (2026) or a string ("2026").
+        wrong_year = sorted(
+            {
+                str(p.get("jaarcode")).strip()
+                for f in features
+                if "jaarcode" in (p := f.get("properties") or {}) and str(p.get("jaarcode")).strip() != str(year)
+            }
+        )
         if wrong_year:
             problems.append(f"jaarcode other than {year}: {', '.join(wrong_year)}")
 
@@ -454,14 +466,17 @@ def topology_check(original: dict[str, Any], simplified: dict[str, Any]) -> Topo
     overlap_before, holes_before = _overlap_and_holes(before)
     overlap_after, holes_after = _overlap_and_holes(after)
 
-    changes = [(abs(a.area - b.area) / b.area * 100 if b.area else 0.0, _code(f))
-               for b, a, f in zip(before, after, original["features"])]
+    changes = [
+        (abs(a.area - b.area) / b.area * 100 if b.area else 0.0, _code(f))
+        for b, a, f in zip(before, after, original["features"], strict=True)
+    ]
     max_change, max_code = max(changes, default=(0.0, ""))
     return TopologyReport(overlap_before, overlap_after, holes_before, holes_after, max_change, max_code)
 
 
-def reproject(fc: dict[str, Any], src: str = "EPSG:28992", dst: str = "EPSG:4326",
-              decimals: int = COORD_DECIMALS) -> dict[str, Any]:
+def reproject(
+    fc: dict[str, Any], src: str = "EPSG:28992", dst: str = "EPSG:4326", decimals: int = COORD_DECIMALS
+) -> dict[str, Any]:
     """Reproject every coordinate and round to ``decimals``.
 
     Shared vertices stay shared: the same input coordinate always maps to the same
@@ -505,8 +520,7 @@ def topojson_text(fc: dict[str, Any], quantization: float = TOPO_QUANTIZATION) -
     further simplification happens here. ``quantization=0`` writes plain coordinates.
     """
     _, _, topojson = _require_geo()
-    topo = topojson.Topology(fc, prequantize=False, topoquantize=quantization or False,
-                             object_name=TOPO_OBJECT_NAME)
+    topo = topojson.Topology(fc, prequantize=False, topoquantize=quantization or False, object_name=TOPO_OBJECT_NAME)
     data = json.loads(topo.to_json())
     for geom in data["objects"][TOPO_OBJECT_NAME]["geometries"]:
         geom["id"] = (geom.get("properties") or {}).get("statcode", geom.get("id"))
@@ -544,13 +558,18 @@ def build_outputs(
         simplified_rd = simplify_shared_borders(fc_rd, tol)
         report = topology_check(fc_rd, simplified_rd)
         wgs84 = reproject(simplified_rd, decimals=decimals)
-        result = BuildResult(geojson_text(wgs84), topojson_text(wgs84, quantization), tol, report,
-                             count_invalid(wgs84))
+        result = BuildResult(geojson_text(wgs84), topojson_text(wgs84, quantization), tol, report, count_invalid(wgs84))
         logger.info(
             "tolerance %g m: GeoJSON %s, TopoJSON %s, overlap +%.0f m2, new holes %d, max area change %.2f%% (%s) "
-            "[%.1f s]", tol, _human(result.geojson_bytes), _human(result.topojson_bytes),
-            report.overlap_increase_m2, report.new_holes, report.max_area_change_pct,
-            report.max_area_change_code, time.perf_counter() - t0,
+            "[%.1f s]",
+            tol,
+            _human(result.geojson_bytes),
+            _human(result.topojson_bytes),
+            report.overlap_increase_m2,
+            report.new_holes,
+            report.max_area_change_pct,
+            report.max_area_change_code,
+            time.perf_counter() - t0,
         )
         if not report.ok:
             raise GeoValidationError(
@@ -560,8 +579,11 @@ def build_outputs(
             )
         if result.geojson_bytes < max_bytes and result.topojson_bytes < max_bytes:
             if result.invalid_codes:
-                logger.warning("%d invalid geometr(y/ies) after rounding: %s", len(result.invalid_codes),
-                               ", ".join(result.invalid_codes[:10]))
+                logger.warning(
+                    "%d invalid geometr(y/ies) after rounding: %s",
+                    len(result.invalid_codes),
+                    ", ".join(result.invalid_codes[:10]),
+                )
             return result
     raise GeoValidationError(f"No tolerance in {list(tolerances)} m gives files below {_human(max_bytes)}")
 
@@ -581,8 +603,11 @@ def _write_atomic(path: Path, text: str) -> None:
 
 
 def load_or_download(
-    year: int, root: Path = config.REPO_ROOT, force: bool = False,
-    session: requests.Session | None = None, expected_count: int | None = None,
+    year: int,
+    root: Path = config.REPO_ROOT,
+    force: bool = False,
+    session: requests.Session | None = None,
+    expected_count: int | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Return ``(feature_collection_rd, provenance)``; download only if the cache is missing or ``force``."""
     cache = raw_cache_path(year, root)
@@ -601,8 +626,13 @@ def load_or_download(
         "content_crs": download.content_crs,
         "downloaded_at_utc": download.downloaded_at,
     }
-    _write_atomic(cache, json.dumps({"type": "FeatureCollection", "provenance": provenance,
-                                     "features": download.features}, separators=(",", ":")))
+    _write_atomic(
+        cache,
+        json.dumps(
+            {"type": "FeatureCollection", "provenance": provenance, "features": download.features},
+            separators=(",", ":"),
+        ),
+    )
     logger.info("Cached full download: %s (%s)", cache.relative_to(root), _human(cache.stat().st_size))
     return feature_collection(download.features), provenance
 
@@ -654,8 +684,11 @@ def run(
         "coordinate_decimals": COORD_DECIMALS,
         "topojson_quantization": TOPO_QUANTIZATION,
         "files": {
-            kind: {"path": paths[kind].relative_to(root).as_posix(), "bytes": paths[kind].stat().st_size,
-                   "sha256": hashlib.sha256(paths[kind].read_bytes()).hexdigest()}
+            kind: {
+                "path": paths[kind].relative_to(root).as_posix(),
+                "bytes": paths[kind].stat().st_size,
+                "sha256": hashlib.sha256(paths[kind].read_bytes()).hexdigest(),
+            }
             for kind in ("geojson", "topojson")
         },
         "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -670,18 +703,32 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Download and simplify CBS municipality boundaries (PDOK).")
     parser.add_argument("--year", type=int, default=DEFAULT_YEAR, help="municipal division year (jaarcode)")
     parser.add_argument("--force", action="store_true", help="re-download even if the raw cache exists")
-    parser.add_argument("--tolerance", type=float, default=None,
-                        help="fixed simplification tolerance in metres (default: smallest that fits)")
+    parser.add_argument(
+        "--tolerance",
+        type=float,
+        default=None,
+        help="fixed simplification tolerance in metres (default: smallest that fits)",
+    )
     parser.add_argument("--max-bytes", type=int, default=DEFAULT_MAX_BYTES, help="size target per output file")
-    parser.add_argument("--expected-count", type=int, default=None,
-                        help="expected number of municipalities (default: known value for the year)")
+    parser.add_argument(
+        "--expected-count",
+        type=int,
+        default=None,
+        help="expected number of municipalities (default: known value for the year)",
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
-                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
     try:
-        run(year=args.year, force=args.force, tolerance=args.tolerance, max_bytes=args.max_bytes,
-            expected_count=args.expected_count)
+        run(
+            year=args.year,
+            force=args.force,
+            tolerance=args.tolerance,
+            max_bytes=args.max_bytes,
+            expected_count=args.expected_count,
+        )
     except (GeoValidationError, GeoDependencyError, requests.RequestException) as exc:
         logger.error("%s", exc)
         return 1

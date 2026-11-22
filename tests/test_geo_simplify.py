@@ -42,10 +42,12 @@ def test_shared_border_simplification_has_no_gaps_or_overlaps(small_fc):
 
 def test_per_polygon_simplify_creates_slivers_and_is_rejected(small_fc):
     """Why topojson: simplifying each polygon on its own moves the two sides of a border differently."""
-    naive = geo.feature_collection([
-        {**f, "geometry": mapping(shape(f["geometry"]).simplify(150, preserve_topology=True))}
-        for f in small_fc["features"]
-    ])
+    naive = geo.feature_collection(
+        [
+            {**f, "geometry": mapping(shape(f["geometry"]).simplify(150, preserve_topology=True))}
+            for f in small_fc["features"]
+        ]
+    )
     report = geo.topology_check(small_fc, naive)
     assert not report.ok
     assert report.overlap_increase_m2 > geo.MAX_OVERLAP_INCREASE_M2 or report.new_holes > 0
@@ -114,8 +116,13 @@ def test_cli_passes_arguments_to_run(monkeypatch):
     calls: list[dict] = []
     monkeypatch.setattr(geo, "run", lambda **kw: calls.append(kw) or {})
     assert geo.main(["--year", "2026", "--tolerance", "50", "--force"]) == 0
-    assert calls[0] == {"year": 2026, "force": True, "tolerance": 50.0,
-                        "max_bytes": geo.DEFAULT_MAX_BYTES, "expected_count": None}
+    assert calls[0] == {
+        "year": 2026,
+        "force": True,
+        "tolerance": 50.0,
+        "max_bytes": geo.DEFAULT_MAX_BYTES,
+        "expected_count": None,
+    }
 
 
 def test_cli_returns_1_on_validation_error(monkeypatch):
