@@ -3,7 +3,7 @@
 Format: decision · rationale · alternatives · status. Evidence in [`cbs_tables_research.md`](cbs_tables_research.md).
 Review of the research PR and the independent checks behind the approvals: [`reviews/2026-11-22_research_review.md`](reviews/2026-11-22_research_review.md).
 
-Status values: **approved** · **approved with changes** (the change is described in the entry) · **deferred** · **rejected**.
+Status values: **proposed** (written up, awaiting the owner's approval) · **approved** · **approved with changes** (the change is described in the entry) · **deferred** · **rejected**.
 
 ## D-001 — House price source: `83625NED`
 - **Decision:** Use the average sale price of existing owner-occupied homes (`GemiddeldeVerkoopprijs_1`) from `83625NED`.
@@ -67,7 +67,8 @@ Status values: **approved** · **approved with changes** (the change is describe
 
 ## D-011 — Population/households source: `70072ned`
 - **Decision:** Use `70072ned` for population, households, dwelling stock and owner-occupied share (year-specific boundaries, harmonised via D-007).
-- **Check:** all 380 municipalities with a price in 2018 have both `Woningvoorraad_59` and `Koopwoningen_64`, so the "5 gaps in 2018" do not affect the harmonisation weights.
+- **Check (corrected 2026-11-22, stage-2 QA):** the five 2018 gaps in `70072ned` are in the WOZ value (`GemiddeldeWOZWaardeVanWoningen_63`: GM0417, GM0743, GM0847, GM1702, GM1721), not in `Koopwoningen_64`. All 380 municipalities with a price in 2018 have both `Woningvoorraad_59` and `Koopwoningen_64`, so the harmonisation weights are complete; only the WOZ value is missing for these five (see DATA_DICTIONARY 2.3).
+- **Precision limitation:** `Koopwoningen_64` is published in whole percentages from 2021 (one decimal before), so the weight is coarser for the 2021–2022 harmonised municipality-years (see DATA_DICTIONARY 2.3, note ²).
 - **Status:** approved (2026-11-22).
 
 ## D-012 — Mortgage rates and map boundaries
@@ -109,3 +110,45 @@ Status values: **approved** · **approved with changes** (the change is describe
 ## D-017 — Naming of metrics
 - **Decision:** Mart columns follow the CLAUDE.md unit convention: `avg_sale_price_eur`, `median_disposable_income_eur`, `median_disposable_income_owner_eur`, `price_to_income_ratio`, `price_to_income_owner_ratio`, `real_avg_sale_price_eur_2025`, `price_growth_since_2011_pct`, `income_growth_since_2011_pct`, `growth_gap_pp`, `pti_rank_desc`.
 - **Status:** approved (2026-11-22).
+
+<!-- D-018…D-021 were proposed in PR #2, D-022…D-025 in PR #4. Both PRs used the numbers D-018…D-021 for
+different decisions (stage-2 QA H-2); #2 keeps D-018…D-021 and the proposals of #4 are renumbered D-022…D-025. -->
+
+## D-018 — SQL model order and transactions
+- **Decision:** The execution order of the SQL models is an explicit list in `sql/models.yaml`. `make transform` builds all models in one transaction and drops tables in the managed schemas (`staging`, `marts`) that no model produces any more.
+- **Rationale:** Numeric file prefixes would break "file name = table name"; a dependency parser is too much machinery for ~10 models. One reviewable list; the runner fails if the list and the folders disagree. One transaction makes a run all-or-nothing; dropping unmanaged tables stops Power BI from reading a stale table of a removed or renamed model.
+- **Alternatives:** numeric prefixes (`01_stg_...`); dbt-style dependency inference.
+- **Status:** proposed (PR #2; drop of unmanaged tables added in the stage-2 QA follow-up).
+
+## D-019 — Staging drops rows without measures
+- **Decision:** Staging drops rows with no measure values in tables that list every historical code for every year (`83625NED`, `70072ned`). Missing municipality-years are detected against the 2026 list downstream (data tests), not kept as NULL rows.
+- **Rationale:** CBS returns all 728 GM codes ever used for every year; an all-NULL row means "municipality did not exist that year". Coverage against the 2026 list is asserted separately.
+- **Alternatives:** keep the NULL rows and filter in every mart.
+- **Status:** proposed (PR #2).
+
+## D-020 — Data tests as SQL files
+- **Decision:** Data tests are SQL files in `sql/tests/` that return the violating rows (`make check`). Known exceptions are listed explicitly inside the test, with a reference to the docs.
+- **Rationale:** Plain SQL any analyst can read; the output is already the start of the investigation (dbt "singular test" convention). They need the downloaded data, so they run in `make check`, not in the offline `make test`.
+- **Alternatives:** pytest against the DuckDB file; Great Expectations / dbt (too heavy for this project).
+- **Status:** proposed (PR #2).
+
+## D-021 — `is_preliminary`
+- **Decision:** `is_preliminary` = period status `Voorlopig` or `Nader voorlopig`. Any other status fails `make check`. Tables without `is_preliminary` in staging (prices, key figures, price index, CPI) must have only `Definitief` years ≥ 2011 (`assert_period_status_final.sql`).
+- **Rationale:** A new CBS status, or a preliminary price year, must not silently count as final.
+- **Status:** proposed (PR #2; the check for the other tables added in the stage-2 QA follow-up, P-5).
+
+## D-022 — Mid-year rename: De Fryske Marren 2015
+- **Decision:** In 2015 GM1921 and GM1940 both have a price for the same territory. They are combined as one equal-weight unit before weighting, because `70072ned` has 1-January figures for GM1921 only.
+- **Status:** proposed (PR #4, as "D-018" there).
+
+## D-023 — Pseudo-municipalities
+- **Decision:** GM0998 Buitenland and GM0999 Niet-gemeentelijk ingedeeld are excluded explicitly (`PSEUDO_CODES`) in the herindeling parser and the weight sensitivity.
+- **Status:** proposed (PR #4, as "D-019" there).
+
+## D-024 — Boundary corrections are not modelled
+- **Decision:** Boundary corrections between existing municipalities are not modelled. Since 2011: 69 transfers, 2 642 inhabitants; the largest relative one is Slochteren → Groningen 2017 (6.6 % of Slochteren), every other transfer is below 3.2 %. Documented as a limitation.
+- **Status:** proposed (PR #4, as "D-020" there).
+
+## D-025 — Split weights
+- **Decision:** Splits use inhabitant shares at the date of the split, applied to all earlier years, with a uniform price within the split municipality.
+- **Status:** proposed (PR #4, as "D-021" there).

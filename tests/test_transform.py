@@ -109,3 +109,29 @@ def test_repo_model_list_matches_sql_folders():
     """The committed sql/models.yaml must list exactly the committed .sql files."""
     models = transform.load_models(config.REPO_ROOT)
     assert all(m.path.exists() for m in models)
+
+
+def test_removed_model_table_is_dropped(project: Path):
+    """QA P-3: a model removed from models.yaml must not leave a stale table behind."""
+    transform.run(root=project)
+    with duckdb.connect(str(config.duckdb_path(project))) as con:
+        con.execute("CREATE VIEW marts.v_old AS SELECT 1 AS x")
+    (project / "sql" / "marts" / "dim_x.sql").rename(project / "sql" / "marts" / "dim_y.sql")
+    (project / "sql" / "models.yaml").write_text("staging:\n  - stg_a\n  - stg_b\nmarts:\n  - dim_y\n")
+
+    transform.run(root=project)
+    tables = _query(project, "select schema_name, table_name from duckdb_tables() order by 1, 2")
+    views = _query(project, "select view_name from duckdb_views() where schema_name = 'marts'")
+    assert ("marts", "dim_x") not in tables and ("marts", "dim_y") in tables
+    assert ("raw", "cbs_x") in tables  # other schemas are not touched
+    assert views == []
+
+
+def test_drop_of_stale_tables_is_rolled_back_on_failure(project: Path):
+    transform.run(root=project)
+    (project / "sql" / "marts" / "dim_x.sql").rename(project / "sql" / "marts" / "dim_y.sql")
+    (project / "sql" / "marts" / "dim_y.sql").write_text("select * from staging.does_not_exist")
+    (project / "sql" / "models.yaml").write_text("staging:\n  - stg_a\n  - stg_b\nmarts:\n  - dim_y\n")
+    with pytest.raises(duckdb.Error):
+        transform.run(root=project)
+    assert _query(project, "select count(*) from marts.dim_x") == [(1,)]

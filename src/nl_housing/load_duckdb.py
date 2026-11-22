@@ -72,6 +72,31 @@ def parquet_targets(table_dir: Path) -> dict[str, Path]:
     return targets
 
 
+def drop_unmanaged(con: duckdb.DuckDBPyConnection, schema: str, keep: set[str]) -> list[str]:
+    """Drop tables and views in ``schema`` whose name is not in ``keep``; return the dropped names.
+
+    A table that was removed from the config (or a renamed SQL model) would otherwise stay
+    in the database, and marts or Power BI could keep reading stale data (QA P-3 / P-4).
+    """
+    rows = con.execute(
+        """
+        SELECT table_name, 'TABLE' FROM duckdb_tables() WHERE schema_name = ? AND database_name = current_database()
+        UNION ALL
+        SELECT view_name, 'VIEW' FROM duckdb_views()
+        WHERE schema_name = ? AND database_name = current_database() AND NOT internal
+        ORDER BY 1
+        """,
+        [schema, schema],
+    ).fetchall()
+    dropped = []
+    for name, kind in rows:
+        if name not in keep:
+            con.execute(f'DROP {kind} "{schema}"."{name}"')
+            logger.warning("Dropped %s %s.%s: no longer produced by the pipeline", kind.lower(), schema, name)
+            dropped.append(name)
+    return dropped
+
+
 def downloaded_table_dirs(root: Path = config.REPO_ROOT) -> list[Path]:
     """Complete downloads only (folders that contain ``metadata.json``)."""
     base = config.raw_dir(root)
@@ -128,6 +153,8 @@ def load_all(root: Path = config.REPO_ROOT, db_path: Path | None = None) -> list
                     row["cbs_modified"],
                 ],
             )
+        if table_dirs:  # never empty the raw schema just because data/raw/ is missing
+            drop_unmanaged(con, RAW_SCHEMA, set(created) | {INGEST_LOG_TABLE})
     logger.info("Loaded %d table(s) into %s", len(created), db_path.name)
     return created
 

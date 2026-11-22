@@ -8,7 +8,10 @@
 --     did not exist in that year and are dropped.
 --   - The latest year (2026) has only population and WOZ; households, stock and share are NULL there.
 --   - owner_occupied_stock = dwelling_stock * owner_occupied_share_pct / 100 is the harmonisation weight
---     for average prices (D-007). It is an estimate (share is rounded to 0.1 %), so it is not rounded.
+--     for average prices (D-007). It is an estimate, so it is not rounded. Precision of the share
+--     (Koopwoningen_64): one decimal in 2011-2020, but whole percentages only from 2021 onwards
+--     (0 non-integer GM values per year in 2021-2025, QA P-2). The weight for 2021-2022 is therefore
+--     coarser (+/- 0.5 pp of the stock); see DATA_DICTIONARY 2.3.
 --   - Units: WOZ is published in 1 000 euro (0 decimals) -> mean_woz_value_eur exact to 1 000 euro.
 
 with source as (

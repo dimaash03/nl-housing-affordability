@@ -7,7 +7,10 @@ Pipeline: CBS OData → Python → DuckDB (raw → staging → marts) → notebo
 
 ## Where things live
 - `config/cbs_tables.yaml` — tables to ingest (example: `cbs_tables.example.yaml`, used only as fallback)
-- `src/nl_housing/` — `config.py` (paths, config parsing), `ingest.py`, `load_duckdb.py`
+- `src/nl_housing/` — `config.py` (paths, config parsing), `ingest.py`, `load_duckdb.py`, `transform.py` (SQL runner),
+  `check.py` (SQL data tests), `geo.py` (PDOK boundaries)
+- `sql/models.yaml` — execution order of the SQL models; `sql/tests/` — data tests (`make check`)
+- `data/reference/` — small committed reference files (boundaries, herindeling mapping)
 - `data/raw/<table_id>/` — Parquet + `metadata.json` (gitignored); `data/nl_housing.duckdb` (gitignored)
 - `sql/staging/` (`stg_*`), `sql/marts/` (`fct_*`, `dim_*`) — see each README
 - `notebooks/` — EDA/analysis; `powerbi/` — .pbix + notes; `tests/` — offline pytest
