@@ -1,6 +1,6 @@
 # Data Dictionary
 
-Status: **draft — proposed, needs owner approval.**
+Status: **approved 2026-11-22** (see `DECISIONS_LOG.md`; changes from the research draft are listed in `reviews/2026-11-22_research_review.md`).
 All table IDs, column keys, units and dimension codes below were verified against the CBS OData API on 2026-11-14.
 Evidence and rejected alternatives are in [`cbs_tables_research.md`](cbs_tables_research.md); decisions are in [`DECISIONS_LOG.md`](DECISIONS_LOG.md).
 The machine-readable version is [`config/cbs_tables.yaml`](../config/cbs_tables.yaml).
@@ -114,39 +114,59 @@ Definitions (from the table metadata, translated):
 - Data columns: `Begindatum_1`, `Einddatum_2` (start/end date), `GebiedsOfGemeentecode_3`, `Provincie_4`.
 - **The successor information is in the `Description` text of the `RegioS` dimension** (`/70739ned/RegioS`), see section 4.
 
-## 3. Metric definitions (proposed)
+## 3. Metric definitions (approved 2026-11-22)
 
-All amounts in euro after unit conversion. `y` = year, `m` = municipality (2026 code).
+All amounts in euro after unit conversion. `y` = year, `m` = municipality (2026 code). Column names follow D-017.
 
-| Metric | Definition | Notes |
+| Column | Definition | Notes |
 |---|---|---|
-| `avg_price` | `GemiddeldeVerkoopprijs_1`, harmonised to 2026 boundaries | Mean price of transacted homes, not quality-adjusted. |
-| `median_disp_income_hh` | `MediaanBesteedbaarInkomen_6 * 1000`, Populatie `3000870`, Kenmerk `1050010` | **Primary income measure.** |
-| `median_disp_income_owner_hh` | same, Kenmerk `1014800` | Sensitivity: income of current owner-occupiers. |
-| **`price_to_income`** (PTI) | `avg_price / median_disp_income_hh` | **Primary affordability metric.** "Years of median household disposable income needed to buy the average home." Higher = less affordable. |
-| `price_to_income_owner` | `avg_price / median_disp_income_owner_hh` | Secondary; less sensitive to the share of renters/students in a municipality. |
+| `avg_sale_price_eur` | `GemiddeldeVerkoopprijs_1`, harmonised to 2026 boundaries (section 4) | Mean price of transacted homes, not quality-adjusted. |
+| `median_disposable_income_eur` | `MediaanBesteedbaarInkomen_6 * 1000`, Populatie `3000870`, Kenmerk `1050010` | **Primary income measure** (D-003). |
+| `median_disposable_income_owner_eur` | same, Kenmerk `1014800` | **Mandatory sensitivity**: income of current owner-occupiers. |
+| **`price_to_income_ratio`** (PTI) | `avg_sale_price_eur / median_disposable_income_eur` | **Primary affordability metric.** "Years of median household disposable income needed to buy the average home." Higher = less affordable. Level is inflated by the mean/median mix — compare changes and ranks (D-004). |
+| `price_to_income_owner_ratio` | `avg_sale_price_eur / median_disposable_income_owner_eur` | Less sensitive to the share of renters, singles and students. |
 | `cpi_2025` | `CPI_1` (yearly average, 2025 = 100) | |
-| `real_avg_price` | `avg_price * 100 / cpi_2025` | In 2025 euro. |
-| `real_median_income` | `median_disp_income_hh * 100 / cpi_2025` | In 2025 euro. |
-| `price_growth_pct`, `income_growth_pct` | `(x_y / x_2011 - 1) * 100`, nominal or real | PTI growth ≈ price growth relative to income growth; CPI cancels out of PTI. |
-| `growth_gap_pp` | `price_growth_pct - income_growth_pct` | Where prices outpaced incomes (Q3). |
-| `pti_rank` | rank of `price_to_income` within year, 1 = least affordable | For ranking shifts (Q2). |
-| `region_group` | `G4` if `m` in {GM0363, GM0599, GM0518, GM0344}; otherwise `Rest of NL` | Optional second split: Randstad provinces (PV26, PV27, PV28) vs rest — **owner to decide**. |
-| `pti_group` (aggregate) | `sum(avg_price_m * households_m) / sum(median_income_m * households_m)` | Household-weighted ratio of means for provinces and groups; never average the municipal ratios unweighted. |
-| `deposit_years` (optional) | `(deposit_share * avg_price) / (savings_rate * median_disp_income_hh)` | Proposed assumptions: `deposit_share` = 0.10 (≈ purchase costs + small down payment), `savings_rate` = 0.10. Parameters must be configurable. |
-| `monthly_payment` (optional) | annuity: `L * r / (1 - (1 + r)^-360)`, `r` = annual DNB rate / 12, `L` = `avg_price` (100 % LTV) | Needs the DNB rate series (not yet sourced). |
-| `payment_to_income` (optional) | `12 * monthly_payment / median_disp_income_hh` | |
+| `real_avg_sale_price_eur_2025` | `avg_sale_price_eur * 100 / cpi_2025` | In 2025 euro. |
+| `real_median_disposable_income_eur_2025` | `median_disposable_income_eur * 100 / cpi_2025` | In 2025 euro. |
+| `price_growth_since_2011_pct`, `income_growth_since_2011_pct` | `(x_y / x_2011 - 1) * 100`, nominal and real variants | Base year 2011 = first year with income (D-008). |
+| `growth_gap_pp` | `price_growth_since_2011_pct - income_growth_since_2011_pct` | Where prices outpaced incomes (Q3). |
+| `pti_rank_desc` | rank of `price_to_income_ratio` within year, 1 = least affordable, among rows without `low_reliability` / `income_missing` | Ranking shifts (Q2); flagged rows get `null` (D-009). |
+| `region_group` | `G4` if `m` in {GM0363, GM0599, GM0518, GM0344}; otherwise `Rest of NL` | Primary split (D-010). |
+| `region_group_3` | `G4` / `Rest of Randstad provinces` (PV26, PV27, PV28 excl. G4) / `Rest of NL` | Secondary split (D-010). |
+| `urbanity_class` | `86247NED` `Code_54` (1 = very strongly urban … 5 = not urban) | "Randstad vs big-city effect" lens. |
 
-Data-quality flags (proposed):
+### Group aggregates (D-016)
+
+| Group | Price | Median income |
+|---|---|---|
+| Province, NL | CBS row `PVxx` / `NL01` in `83625NED` | CBS row `PVxx` / `NL01` in `86380NED` |
+| Single G4 city | municipality row | municipality row |
+| G4 combined | transaction-weighted (`85792NED.VerkochteWoningen_4`) | household-weighted mean of medians *(approx.)* |
+| Rest of NL | `(p_NL * n_NL - sum_g p_g * n_g) / (n_NL - sum_g n_g)` — exact | household-weighted mean of medians *(approx.)* |
+| Rest of Randstad provinces | owner-stock-weighted mean *(approx.)* | household-weighted mean of medians *(approx.)* |
+
+Never average municipal ratios unweighted for a headline figure. Validation: the household-weighted mean of medians over all 342 municipalities must stay within 2 % of the official NL median for every year (2011: +0.57 %, 2024: +0.80 %).
+
+### Q4 scenario metrics (D-013)
+
+Parameters live in one config file (planned: `config/scenarios.yaml`) and are printed on the dashboard.
+
+| Column | Definition |
+|---|---|
+| `monthly_payment_eur` | annuity `L * r / (1 - (1 + r)^-n)`, `L = avg_sale_price_eur` (100 % LTV), `r = rate / 12`, `n = 360`; computed for each rate of the scenario grid |
+| `payment_to_income_pct` | `100 * 12 * monthly_payment_eur / median_disposable_income_eur` (gross of mortgage-interest tax relief — stated as a limitation) |
+| `upfront_cost_saving_years` | `upfront_cost_share * avg_sale_price_eur / (savings_rate * median_disposable_income_eur)` |
+
+### Data-quality flags
 
 | Flag | Rule |
 |---|---|
-| `is_preliminary` | `year = 2025` (income preliminary). |
-| `is_harmonised` | Municipality value was built from more than one historical code (44 of 342 municipalities for at least one year). |
-| `low_reliability` | Fewer than 5 000 households (`ParticuliereHuishoudens_1 < 5`) — few transactions, volatile averages (e.g. Wadden islands). |
-| `income_missing` | Income suppressed (`null`); in 2025 this affects 3 municipalities for all households (GM0088 Schiermonnikoog, GM0096 Vlieland, GM0277 Rozendaal). |
+| `is_preliminary` | CBS `Perioden.Status = 'Voorlopig'` in `86380NED` (currently 2025). Never hard-code the year. |
+| `is_harmonised` | Municipality value built from more than one historical code in that year. |
+| `low_reliability` | Fewer than 5 000 households (`ParticuliereHuishoudens_1 < 5`); 19 municipalities in 2024. |
+| `income_missing` | Income suppressed (`null`); in 2025: GM0088 Schiermonnikoog, GM0096 Vlieland, GM0277 Rozendaal. |
 
-## 4. Harmonisation to 2026 boundaries (proposed)
+## 4. Harmonisation to 2026 boundaries (approved, D-007)
 
 1. Parse `70739ned/RegioS` → `Description` into a mapping `old_code → new_code` with the number of inhabitants (and dwellings) transferred. Two patterns:
    - `Opgeheven per DD-MM-YYYY, overgegaan naar: - <name> (GMxxxx), ... <ha> hectare met <n> woningen en <n> inwoners` (abolished; 1 line per receiving municipality),
@@ -155,4 +175,5 @@ Data-quality flags (proposed):
 3. **Additive variables** (population, households, dwellings): `value_2026 = sum(value_old * weight)`.
 4. **Average price**: weighted mean of historical averages with weight = `owner_occupied_stock_old * weight`, where `owner_occupied_stock = Woningvoorraad_59 * Koopwoningen_64 / 100` from `70072ned` (CBS publishes no transaction counts per municipality).
 5. **Income** needs no harmonisation (86380NED is already in 2026 boundaries).
-6. Tested: all 445 historical GM codes that appear in 83625NED for 2011–2025 resolve to the 2026 list.
+6. Prototype result (research, not yet reproducible): all 445 historical GM codes that appear in 83625NED for 2011–2025 resolve to the 2026 list. Must be reproduced by committed, tested code; the resulting mapping is committed as `data/reference/municipality_mapping_2026.csv`.
+7. Edge case 2015: De Fryske Marren appears twice (GM1921 old name, GM1940 new name from 01-07-2015); both map to GM1940 with equal weight (no transaction counts).

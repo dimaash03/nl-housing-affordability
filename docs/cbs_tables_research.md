@@ -82,7 +82,7 @@ Caveats:
 ## 3. Population and households — `70072ned` (verified)
 
 - Title: *Regionale kerncijfers Nederland*; period "Jaarcijfers 1995 - 2026"; 785 regions (728 GM codes, year-specific boundaries).
-- Verified keys and fill rate at GM level (2010–2026): `TotaleBevolking_1` filled 2010–2026; `TotaalParticuliereHuishoudens_51`, `GemiddeldeHuishoudensgrootte_58`, `Woningvoorraad_59`, `Koopwoningen_64` filled 2010–2025 (Koopwoningen has 5 gaps in 2018); `GemiddeldeWOZWaardeVanWoningen_63` filled 2010–2026.
+- Verified keys and fill rate at GM level (2010–2026): `TotaleBevolking_1` filled 2010–2026; `TotaalParticuliereHuishoudens_51`, `GemiddeldeHuishoudensgrootte_58`, `Woningvoorraad_59`, `Koopwoningen_64` filled 2010–2025 (Koopwoningen has 5 gaps in 2018 — review 2026-11-22: none of them is a municipality with a 2018 price, so the harmonisation weights are complete); `GemiddeldeWOZWaardeVanWoningen_63` filled 2010–2026.
 - The table also contains income columns (e.g. `ParticuliereHuishoudensExclStudenten_95`, mean disposable income) in year-specific boundaries, filled 2011–2024 — not used (86380NED is better).
 
 Sample:
@@ -143,7 +143,7 @@ Other CBS options documented (on `www.cbs.nl`, not reachable, not verified): "Ge
   - queryable: `jaarcode` (integer) → use `&jaarcode=2026`
   - CRS: CRS84 (default), EPSG:28992 (RD New, storage), EPSG:3857, EPSG:4258
 - 1995–2015: `https://api.pdok.nl/cbs/gebiedsindelingen-historisch/ogc/v1/collections/gemeente_gegeneraliseerd`
-- The feature property names (expected something like a statistical code and name) were **not verified**; check `/schema?f=json` before writing the join.
+- Review 2026-11-22: property names verified via `/collections/gemeente_gegeneraliseerd/schema?f=json`: `statcode`, `statnaam`, `jaarcode`, `jrstatcode`, `rubriek`, `startdatum`, `einddatum`. Join on `statcode`. Licence still to be confirmed.
 - Power BI note: Shape Map / Azure Maps need TopoJSON or GeoJSON; convert and simplify locally (e.g. mapshaper) and join on the GM code.
 
 ## 7. Mortgage interest rates (documented, not verified)
@@ -159,7 +159,7 @@ Other CBS options documented (on `www.cbs.nl`, not reachable, not verified): "Ge
 | `86161NED`, `86004NED`, … (income, indeling 2025/2024/…) | Superseded by `86380NED` (newer boundaries, 2025 added, revised 2024). |
 | Kerncijfers wijken en buurten (`85984NED` 2024, `83220NED` 2015, …) | One table per year; column keys change between years (e.g. `GemiddeldInkomenPerInwoner_66` in 2015 vs `_78` in 2024); income per person/recipient rather than household median; boundaries of each year. Good for neighbourhood detail, poor for a time series. |
 | Income columns in `70072ned` | Year-specific boundaries and mean (not median) only; 2024 values are preliminary vintage. |
-| `85792NED` price index | Quality-adjusted (better for trends) but only 21 regions (NL, LD, PV, G4). Kept as optional validation source. |
+| `85792NED` price index | Not rejected as a validation source: quality-adjusted, only 21 regions (NL, LD, PV, G4), has yearly rows and transaction counts. **Enabled** by D-015. |
 | Mean WOZ value (`70072ned`, `85036NED`) | Tax valuation with a 1-year lag (valuation date 1 January of the prior year), not a market price. Possible robustness check. |
 | `03759ned` population | Verified to exist (keys `BevolkingOp1Januari_1`, `GemiddeldeBevolking_2`; dimensions Geslacht, Leeftijd, BurgerlijkeStaat, RegioS) but more complex; `70072ned` gives population and households together. |
 | `71486ned` households | Valid (`TotaalParticuliereHuishoudens_1`, 2000–2026), but `70072ned` already covers households; keep as fallback. |

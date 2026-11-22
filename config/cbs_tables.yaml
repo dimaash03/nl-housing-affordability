@@ -14,12 +14,16 @@
 # - Schema: `id`, `name`, `description`, `enabled` are read by src/nl_housing/config.py;
 #   the other keys (purpose, title, filters, columns, ...) document how staging should use the table.
 #   ingest.py downloads complete tables; filters/columns are applied in sql/staging/.
-# - Status: all choices are "proposed — needs owner approval" (see docs/DECISIONS_LOG.md).
+# - `filters`, `columns`, `endpoint` are DOCUMENTATION for the staging models only: ingest.py always
+#   downloads the complete table through the ODataFeed endpoint.
+# - Status: approved 2026-11-22 (see docs/DECISIONS_LOG.md).
 
 project:
   analysis_years: [2011, 2025]          # 2025 income is preliminary ("Voorlopig")
   target_municipal_boundaries: 2026     # municipal division of 1 January 2026 (342 municipalities)
   randstad_g4: [GM0363, GM0599, GM0518, GM0344]  # Amsterdam, Rotterdam, 's-Gravenhage, Utrecht
+  randstad_provinces: [PV26, PV27, PV28]         # Utrecht, Noord-Holland, Zuid-Holland (D-010, secondary split)
+  low_reliability_max_households: 5000           # D-009
 
 tables:
   - id: 83625NED
@@ -160,11 +164,11 @@ tables:
     dimension_endpoints:
       - RegioS   # fields: Key, Title, Description -> stored by ingest.py in data/raw/70739ned/dimensions/RegioS.parquet
 
-  # --- Optional / reference tables (verified; disabled by default) ----------
+  # --- Optional / reference tables (verified) --------------------------------
   - id: 85792NED
     name: house_price_index_region
-    description: "Quality-adjusted price index + number of transactions; only NL, LD, PV and the G4 (21 regions), quarterly"
-    enabled: false
+    description: "Quality-adjusted price index + number of transactions; only NL, LD, PV and the G4 (21 regions); quarterly + yearly rows (YYYYJJ00, 1995-2025)"
+    enabled: true             # D-015: trend check vs mean price; transaction counts for G4 / Rest-of-NL aggregation (D-016)
     purpose: house_price_index_and_transactions_g4
     title: "Bestaande koopwoningen; verkoopprijzen, prijsindex 2020=100, regio"
     columns: [RegioS, Perioden, PrijsindexVerkoopprijzen_1, VerkochteWoningen_4, GemiddeldeVerkoopprijs_7]
