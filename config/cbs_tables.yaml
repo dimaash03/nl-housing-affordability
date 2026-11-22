@@ -1,6 +1,6 @@
 # CBS StatLine tables used by the NL Housing Affordability project.
 # Every table ID, column key and dimension key below was verified against the
-# CBS OData API (opendata.cbs.nl) on 2026-11-14. See docs/cbs_tables_research.md.
+# CBS OData API (opendata.cbs.nl) on 2026-11-14 (metadata re-checked 2026-11-22). See docs/cbs_tables_research.md.
 #
 # Notes for the ingestion script:
 # - Base URLs:
@@ -11,6 +11,9 @@
 #   region keys like 'CR04  ' or 'GM0363    ' in some tables). Always .strip() keys after download.
 #   Filters below were tested with exactly the quoted strings.
 # - Period keys look like '2024JJ00' (JJ = yearly, MM = monthly, KW = quarterly).
+# - Schema: `id`, `name`, `description`, `enabled` are read by src/nl_housing/config.py;
+#   the other keys (purpose, title, filters, columns, ...) document how staging should use the table.
+#   ingest.py downloads complete tables; filters/columns are applied in sql/staging/.
 # - Status: all choices are "proposed — needs owner approval" (see docs/DECISIONS_LOG.md).
 
 project:
@@ -20,6 +23,9 @@ project:
 
 tables:
   - id: 83625NED
+    name: avg_sale_price_region
+    description: "Average sale price of existing owner-occupied homes per municipality and year"
+    enabled: true
     purpose: house_prices
     title: "Bestaande koopwoningen; gemiddelde verkoopprijzen, regio"
     title_en: "Existing own homes; average purchase prices, region"
@@ -34,6 +40,9 @@ tables:
       - GemiddeldeVerkoopprijs_1      # average sale price, euro
 
   - id: 86380NED
+    name: household_income_region_2026
+    description: "Household income (mean/median, disposable/standardised) per municipality, 2026 division"
+    enabled: true
     purpose: household_income
     title: "Inkomen van huishoudens; huishoudenskenmerken, regio (indeling 2026)"
     title_en: "Income of households; household characteristics, region (2026 municipal division)"
@@ -61,6 +70,9 @@ tables:
       - MediaanBesteedbaarInkomen_6           # median disposable income, 1 000 euro
 
   - id: 70072ned
+    name: regional_key_figures
+    description: "Population, households, dwelling stock and owner-occupied share per municipality and year"
+    enabled: true
     purpose: population_households_housing_stock
     title: "Regionale kerncijfers Nederland"
     title_en: "Regional key figures Netherlands (translation)"
@@ -80,6 +92,9 @@ tables:
       - GemiddeldeWOZWaardeVanWoningen_63  # mean WOZ (tax) value, 1 000 euro (2026 filled)
 
   - id: 86141NED
+    name: cpi_2025
+    description: "Consumer price index 2025=100 (yearly averages used as deflator)"
+    enabled: true
     purpose: cpi
     title: "Consumentenprijzen; CPI 2025=100, index en mutaties"
     title_en: "Consumer prices; CPI 2025=100, index and rates of change"
@@ -94,6 +109,9 @@ tables:
       - JaarmutatieCPI_5    # year-on-year change, %
 
   - id: 86247NED
+    name: regions_2026
+    description: "Municipality list 2026 with province, COROP, size and urbanity class"
+    enabled: true
     purpose: municipality_reference
     title: "Gebieden in Nederland 2026"
     title_en: "Regions in the Netherlands 2026 (translation)"
@@ -119,6 +137,9 @@ tables:
       - Inwonertal_56   # population
 
   - id: 70739ned
+    name: regions_since_1830
+    description: "Municipal start/end dates; RegioS descriptions hold the reorganisation (herindeling) mapping"
+    enabled: true
     purpose: municipal_reorganisations
     title: "Gebieden; overzicht vanaf 1830"
     title_en: "Regions; overview since 1830 (translation)"
@@ -137,24 +158,31 @@ tables:
     # Parse "Opgeheven per DD-MM-YYYY, overgegaan naar: - <name> (GMxxxx), ... <ha> hectare met <n> woningen en <n> inwoners"
     # and "Naamswijziging per DD-MM-YYYY, nieuwe naam: <name> (GMxxxx)". See docs/cbs_tables_research.md section 5.
     dimension_endpoints:
-      - RegioS   # fields: Key, Title, Description
+      - RegioS   # fields: Key, Title, Description -> stored by ingest.py in data/raw/70739ned/dimensions/RegioS.parquet
 
-# Optional / reference tables (verified, not required for the core metrics)
-optional_tables:
+  # --- Optional / reference tables (verified; disabled by default) ----------
   - id: 85792NED
+    name: house_price_index_region
+    description: "Quality-adjusted price index + number of transactions; only NL, LD, PV and the G4 (21 regions), quarterly"
+    enabled: false
     purpose: house_price_index_and_transactions_g4
     title: "Bestaande koopwoningen; verkoopprijzen, prijsindex 2020=100, regio"
-    note: "Quality-adjusted price index + number of transactions; only NL, LD, PV and the G4 cities (21 regions), quarterly."
     columns: [RegioS, Perioden, PrijsindexVerkoopprijzen_1, VerkochteWoningen_4, GemiddeldeVerkoopprijs_7]
+
   - id: 71905ned
+    name: cpi_1900
+    description: "Yearly CPI 1900-2025 (1900=100); fallback if 86141NED changes base year"
+    enabled: false
     purpose: cpi_long_run
     title: "Consumentenprijzen; prijsindex 1900=100"
-    note: "Yearly CPI 1900-2025; fallback if 86141NED changes base year."
     columns: [Perioden, CPI_1, JaarmutatieCPI_2]
+
   - id: 86438NED
+    name: regions_2027
+    description: "Municipality list 2027 (341 municipalities; GM1696 Wijdemeren absent compared with 2026)"
+    enabled: false
     purpose: municipality_reference_next_year
     title: "Gebieden in Nederland 2027"
-    note: "341 municipalities; GM1696 Wijdemeren is absent compared with 2026."
 
 # External sources (documented only, not ingested from this environment)
 external_sources:

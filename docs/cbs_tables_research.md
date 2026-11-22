@@ -8,6 +8,8 @@ sources on those hosts are documented from web search results only and marked as
 
 Everything below marked "verified" was returned by the API. Nothing was assumed from memory.
 
+**Re-check 2026-11-22:** table metadata (`Modified`, `Period`) of all chosen tables is unchanged, except `86247NED` (modified 2026-11-17: final figures for centre municipalities and police units added). All 13 column keys used from `86247NED` still exist and the list still has 342 municipalities; only the formatting of 8 municipality names changed (e.g. `Bergen (NH.)` → `Bergen (NH)`, `Beek (L.)` → `Beek (LI)`). **Join on codes, never on names.**
+
 ## 0. Summary
 
 | Need | Chosen table | Coverage | Boundaries | Status |
