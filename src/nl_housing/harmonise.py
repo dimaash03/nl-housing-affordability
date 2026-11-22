@@ -63,6 +63,12 @@ PRICE_TABLE = "83625NED"   # average sale prices (defines which codes must be co
 DEFAULT_START_YEAR = 2011
 DEFAULT_END_YEAR = 2025
 
+#: GM codes in 70739ned that are not municipalities. GM0998 "Buitenland" (abroad)
+#: has no end date, so 70739ned lists 343 active GM codes vs 342 in 86247NED;
+#: GM0999 "Niet-gemeentelijk ingedeeld" (unallocated territory) ended 1996.
+#: Both are excluded everywhere (events, coverage, boundary corrections).
+PSEUDO_CODES: dict[str, str] = {"GM0998": "Buitenland", "GM0999": "Niet-gemeentelijk ingedeeld"}
+
 MAPPING_FILE_NAME = "municipality_mapping_2026.csv"
 DUCKDB_SCHEMA = "reference"
 DUCKDB_TABLE = "municipality_mapping_2026"
@@ -202,7 +208,7 @@ def boundary_corrections(regions: pd.DataFrame, since: date) -> pd.DataFrame:
     rows = []
     for key, title, desc in regions[["Key", "Title", "Description"]].itertuples(index=False):
         code = str(key).strip()
-        if not code.startswith("GM") or pd.isna(desc):
+        if not code.startswith("GM") or code in PSEUDO_CODES or pd.isna(desc):
             continue
         lines = _normalise_lines(str(desc))
         for i, line in enumerate(lines):
@@ -210,6 +216,8 @@ def boundary_corrections(regions: pd.DataFrame, since: date) -> pd.DataFrame:
             if not m or (eff := _parse_date(m.group("date"))) < since:
                 continue
             for r in _parse_receivers(lines, i):
+                if r.code in PSEUDO_CODES:  # e.g. Eijsden-Margraten <-> abroad (2018, 0 inhabitants)
+                    continue
                 rows.append({"from_code": code, "from_name": str(title).strip(), "to_code": r.code,
                              "to_name": r.name, "effective_date": eff, "hectares": r.hectares,
                              "dwellings": r.dwellings, "inhabitants": r.inhabitants})
@@ -251,7 +259,7 @@ def build_events(regions: pd.DataFrame) -> dict[str, SuccessionEvent]:
     events: dict[str, SuccessionEvent] = {}
     for key, title, desc in regions[["Key", "Title", "Description"]].itertuples(index=False):
         code = str(key).strip()
-        if not code.startswith("GM"):
+        if not code.startswith("GM") or code in PSEUDO_CODES:
             continue
         found = parse_description(code, str(title).strip(), None if pd.isna(desc) else str(desc))
         if len(found) > 1:
@@ -361,6 +369,9 @@ def build_mapping(codes: list[str] | set[str], events: dict[str, SuccessionEvent
     Output is sorted by ``old_code, new_code_2026`` (deterministic diffs).
     """
     target_set = set(targets)
+    pseudo = sorted(set(codes) & set(PSEUDO_CODES))
+    if pseudo:
+        raise HarmonisationError(f"Pseudo-municipality codes cannot be mapped: {pseudo}")
     rows: list[dict] = []
     errors: list[str] = []
     for code in sorted(set(codes)):
@@ -430,9 +441,17 @@ def check_end_dates(events: dict[str, SuccessionEvent], end_dates: dict[str, dat
         if end != event.effective_date:
             problems.append(f"{code}: description says {event.effective_date}, Einddatum {end}")
     for code, end in sorted(end_dates.items()):
-        if end is not None and code not in events:
+        if end is not None and code not in events and code not in PSEUDO_CODES:
             problems.append(f"{code}: Einddatum {end} but no terminating event in the description")
     return problems
+
+
+def active_codes(end_dates: dict[str, date | None]) -> set[str]:
+    """GM codes without an end date in ``70739ned``, excluding :data:`PSEUDO_CODES`.
+
+    Must equal the 2026 list (``86247NED``); :func:`run` fails otherwise.
+    """
+    return {code for code, end in end_dates.items() if end is None and code not in PSEUDO_CODES}
 
 
 def summarise(mapping: pd.DataFrame, events: dict[str, SuccessionEvent], since: date) -> dict:
@@ -506,8 +525,8 @@ def load_price_codes(start_year: int, end_year: int, root: Path = config.REPO_RO
                          columns=["RegioS", "Perioden", "GemiddeldeVerkoopprijs_1"])
     df["RegioS"] = df["RegioS"].str.strip()
     year = df["Perioden"].str[:4].astype(int)
-    mask = (df["RegioS"].str.startswith("GM") & year.between(start_year, end_year)
-            & df["GemiddeldeVerkoopprijs_1"].notna())
+    mask = (df["RegioS"].str.startswith("GM") & ~df["RegioS"].isin(PSEUDO_CODES)
+            & year.between(start_year, end_year) & df["GemiddeldeVerkoopprijs_1"].notna())
     return set(df.loc[mask, "RegioS"])
 
 
@@ -557,8 +576,14 @@ def run(start_year: int = DEFAULT_START_YEAR, end_year: int = DEFAULT_END_YEAR,
     logger.info("%d target municipalities (%s); %d GM codes with a price in %s %d-%d",
                 len(targets), TARGET_TABLE, len(codes), PRICE_TABLE, start_year, end_year)
 
-    for problem in check_end_dates(events, load_end_dates(root)):
+    end_dates = load_end_dates(root)
+    for problem in check_end_dates(events, end_dates):
         logger.warning("End-date check: %s", problem)
+    active = active_codes(end_dates)
+    if active != set(targets):
+        raise HarmonisationError(f"Active codes in {REORG_TABLE} differ from {TARGET_TABLE}: "
+                                 f"only in {REORG_TABLE} {sorted(active - set(targets))}, "
+                                 f"only in {TARGET_TABLE} {sorted(set(targets) - active)}")
 
     mapping = build_mapping(codes, events, targets, names)
     validate_mapping(mapping, codes, set(targets))

@@ -290,3 +290,27 @@ def test_boundary_corrections_since_2011(regions):
     assert weesp[["to_code", "effective_date", "hectares", "inhabitants"]].values.tolist() == [
         ["GM1942", date(2016, 1, 1), 4.0, 0]]
     assert (bc["effective_date"] >= date(2011, 1, 1)).all()  # Weesp's 2009 correction is excluded
+
+
+# --- Pseudo-municipalities (GM0998 Buitenland, GM0999 Niet-gemeentelijk ingedeeld) ---------
+
+
+def test_pseudo_codes_are_excluded(regions, events, targets, names):
+    assert {"GM0998", "GM0999"} <= set(regions["Key"])
+    # GM0999 has "Opgeheven per 01-01-1996" in its description, but is not a municipality
+    assert not set(h.PSEUDO_CODES) & set(events)
+    with pytest.raises(h.HarmonisationError, match="Pseudo-municipality"):
+        h.build_mapping(["GM0998"], events, targets, names)
+
+
+def test_pseudo_codes_not_in_boundary_corrections(regions):
+    # Eijsden-Margraten (GM1903) <-> Buitenland (GM0998), Grenswijziging 01-01-2018
+    bc = h.boundary_corrections(regions, since=date(2011, 1, 1))
+    assert not set(bc["from_code"]) & set(h.PSEUDO_CODES)
+    assert not set(bc["to_code"]) & set(h.PSEUDO_CODES)
+
+
+def test_active_codes_exclude_buitenland():
+    ends = {"GM0363": None, "GM0998": None, "GM0457": date(2022, 3, 24), "GM0999": date(1996, 1, 1)}
+    assert h.active_codes(ends) == {"GM0363"}
+    assert h.check_end_dates({}, {"GM0999": date(1996, 1, 1)}) == []
