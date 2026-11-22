@@ -1,0 +1,6 @@
+# Optional: municipality boundaries for maps (python -m nl_housing.geo).
+# Install on top of the base requirements:  .venv/bin/pip install -r requirements-geo.txt
+# All three ship wheels for macOS arm64 (Apple Silicon); no system GDAL is needed.
+shapely>=2.0      # geometry, validity and area checks
+pyproj>=3.6       # RD New (EPSG:28992) -> WGS84 (EPSG:4326)
+topojson>=1.9     # topology-preserving simplification (shared borders) + TopoJSON export
