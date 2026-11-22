@@ -7,6 +7,9 @@
 # - Every .sql file in a layer folder must be listed, and every listed model must exist;
 #   the runner fails otherwise, so this file cannot silently drift from the folder.
 
-staging: []
+staging:
+  # Staging models read only from `raw` and are independent of each other.
+  - stg_cbs__house_prices
+  - stg_cbs__household_income
 
 marts: []
