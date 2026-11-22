@@ -34,7 +34,7 @@ the reasoning behind each choice: [docs/DECISIONS_LOG.md](docs/DECISIONS_LOG.md)
 | Storage & transformation | DuckDB (schemas `raw` → `staging` → `marts`), SQL |
 | Analysis | Jupyter, pandas, matplotlib, plotly |
 | Dashboard | Power BI Desktop (star schema) |
-| Quality | pytest (offline unit tests) |
+| Quality | pytest (offline unit tests), SQL data tests (`make check`), ruff (lint + format) |
 
 ## Architecture
 
@@ -65,12 +65,15 @@ nl-housing-affordability/
 ├── notebooks/         # EDA and analysis
 ├── powerbi/           # .pbix file and dashboard notes
 ├── sql/
+│   ├── models.yaml    # execution order of the SQL models
 │   ├── staging/       # stg_* models: clean & rename raw CBS tables
-│   └── marts/         # fct_* / dim_* models: the star schema
-├── src/nl_housing/    # Python package: config, ingest, load_duckdb
+│   ├── marts/         # fct_* / dim_* models: the star schema
+│   └── tests/         # data tests: each query returns the rows that violate an expectation
+├── src/nl_housing/    # Python package: config, ingest, load_duckdb, transform, check
 ├── tests/             # offline unit tests (network is mocked)
 ├── Makefile
-└── requirements.txt
+├── requirements.txt  # dependency lower bounds
+└── requirements.lock # exact versions of the last tested environment
 ```
 
 ## How to run
@@ -78,10 +81,13 @@ nl-housing-affordability/
 Requires Python 3.10+ (developed on macOS / Apple Silicon).
 
 ```bash
-make setup     # create .venv, install requirements and the nl_housing package
-make ingest    # download all tables in config/cbs_tables.yaml to data/raw/ (FORCE=1 to refresh)
-make load      # load data/raw/ into data/nl_housing.duckdb, schema `raw`
-make test      # run unit tests (no network needed)
+make setup       # create .venv, install requirements.txt and the nl_housing package
+make ingest      # download all tables in config/cbs_tables.yaml to data/raw/ (FORCE=1 to refresh)
+make load        # load data/raw/ into data/nl_housing.duckdb, schema `raw`
+make transform   # build the SQL models into schemas `staging` / `marts` (order: sql/models.yaml)
+make check       # run the SQL data tests in sql/tests/ against the database
+make test        # run unit tests (no network needed)
+make lint        # ruff lint + format check (`make format` fixes)
 ```
 
 Without `make`:
@@ -91,11 +97,21 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && pip install -e .
 python -m nl_housing.ingest [--table 83625NED] [--force]
 python -m nl_housing.load_duckdb
+python -m nl_housing.transform
+python -m nl_housing.check
 pytest
 ```
 
+**Reproducible environment.** `requirements.txt` holds lower bounds (what the code needs);
+`requirements.lock` pins the exact versions the pipeline was last run and tested with
+(`make setup-locked` installs it; `make lock` regenerates it from `.venv`). The lock file was generated on
+Python 3.13 / Linux and some pins (e.g. numpy) need Python 3.12 or newer; on Python 3.10/3.11 use `make setup`.
+
 Ingestion is idempotent: tables that are already downloaded are skipped unless `--force` is used.
 Every table folder contains a `metadata.json` with the download timestamp (UTC), row count and source URL.
+Requests to CBS are retried on HTTP 429/5xx and connection errors with exponential backoff (honouring `Retry-After`).
+`make transform` rebuilds every model with `CREATE OR REPLACE TABLE` inside one transaction, so it can be re-run
+safely and a failing model leaves the previous tables untouched.
 
 ## Tech choices
 

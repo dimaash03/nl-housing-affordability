@@ -78,8 +78,7 @@ def downloaded_table_dirs(root: Path = config.REPO_ROOT) -> list[Path]:
     if not base.exists():
         return []
     return sorted(
-        p for p in base.iterdir()
-        if p.is_dir() and not p.name.startswith(".") and (p / METADATA_FILE).exists()
+        p for p in base.iterdir() if p.is_dir() and not p.name.startswith(".") and (p / METADATA_FILE).exists()
     )
 
 
@@ -105,8 +104,12 @@ def load_all(root: Path = config.REPO_ROOT, db_path: Path | None = None) -> list
                 logger.info("Loaded %s.%s (%d rows)", RAW_SCHEMA, name, n)
                 created.append(name)
             meta = json.loads((table_dir / METADATA_FILE).read_text(encoding="utf-8"))
-            log_rows.append({k: meta.get(k) for k in
-                             ("table_id", "title", "downloaded_at_utc", "row_count", "source_url", "cbs_modified")})
+            log_rows.append(
+                {
+                    k: meta.get(k)
+                    for k in ("table_id", "title", "downloaded_at_utc", "row_count", "source_url", "cbs_modified")
+                }
+            )
 
         con.execute(
             f"""CREATE OR REPLACE TABLE {RAW_SCHEMA}.{INGEST_LOG_TABLE} (
@@ -116,8 +119,14 @@ def load_all(root: Path = config.REPO_ROOT, db_path: Path | None = None) -> list
         for row in log_rows:
             con.execute(
                 f"INSERT INTO {RAW_SCHEMA}.{INGEST_LOG_TABLE} VALUES (?, ?, ?, ?, ?, ?)",
-                [row["table_id"], row["title"], row["downloaded_at_utc"], row["row_count"],
-                 row["source_url"], row["cbs_modified"]],
+                [
+                    row["table_id"],
+                    row["title"],
+                    row["downloaded_at_utc"],
+                    row["row_count"],
+                    row["source_url"],
+                    row["cbs_modified"],
+                ],
             )
     logger.info("Loaded %d table(s) into %s", len(created), db_path.name)
     return created

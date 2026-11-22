@@ -82,7 +82,7 @@ Caveats:
 ## 3. Population and households — `70072ned` (verified)
 
 - Title: *Regionale kerncijfers Nederland*; period "Jaarcijfers 1995 - 2026"; 785 regions (728 GM codes, year-specific boundaries).
-- Verified keys and fill rate at GM level (2010–2026): `TotaleBevolking_1` filled 2010–2026; `TotaalParticuliereHuishoudens_51`, `GemiddeldeHuishoudensgrootte_58`, `Woningvoorraad_59`, `Koopwoningen_64` filled 2010–2025 (Koopwoningen has 5 gaps in 2018 — review 2026-11-22: none of them is a municipality with a 2018 price, so the harmonisation weights are complete); `GemiddeldeWOZWaardeVanWoningen_63` filled 2010–2026.
+- Verified keys and fill rate at GM level (2010–2026): `TotaleBevolking_1` filled 2010–2026; `TotaalParticuliereHuishoudens_51`, `GemiddeldeHuishoudensgrootte_58`, `Woningvoorraad_59`, `Koopwoningen_64` filled 2010–2025 (Koopwoningen has 5 gaps in 2018 — review 2026-11-22: none of them is a municipality with a 2018 price, so the harmonisation weights are complete. **Correction 2026-11-22 (staging run):** the 5 gaps of 2018 are in `GemiddeldeWOZWaardeVanWoningen_63`, not in `Koopwoningen_64`; Koopwoningen is complete for all 380 municipalities, see DATA_DICTIONARY 2.3); `GemiddeldeWOZWaardeVanWoningen_63` filled 2010–2026.
 - The table also contains income columns (e.g. `ParticuliereHuishoudensExclStudenten_95`, mean disposable income) in year-specific boundaries, filled 2011–2024 — not used (86380NED is better).
 
 Sample:

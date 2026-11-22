@@ -16,3 +16,24 @@ Naming conventions:
 - one `SELECT` per file, built from CTEs (`with source as (...), renamed as (...) select * from renamed`)
 - snake_case everywhere, lowercase SQL keywords are fine but be consistent within a file
 - a header comment in each file: source table id, grain, and any filters applied
+
+## Models
+
+Built by `make transform` in the order of [`../models.yaml`](../models.yaml); checked by `make check` ([`../tests/`](../tests)).
+Row counts are from the run of 2026-11-22 (CBS data as downloaded that day).
+
+| Model | Source | Grain | Main filters | Rows |
+|---|---|---|---|---|
+| `stg_cbs__house_prices` | 83625NED | region_code × year | yearly, year ≥ 2011, NULL price dropped | 5 884 |
+| `stg_cbs__household_income` | 86380NED | region_code × year × household_group | Populatie 3000870; Kenmerk 1050010 (`all`) / 1014800 (`owner_occupier`) | 13 020 |
+| `stg_cbs__regional_key_figures` | 70072ned | region_code × year | yearly, year ≥ 2011, all-NULL rows dropped | 6 882 |
+| `stg_cbs__cpi` | 86141NED | year | category `T001112`, yearly averages | 16 |
+| `stg_cbs__municipalities_2026` | 86247NED | municipality_code | none | 342 |
+| `stg_cbs__house_price_index` | 85792NED | region_code × year | yearly (all years since 1995) | 651 |
+| `stg_cbs__regions_history` | 70739ned | region_code | none | 1 531 |
+
+Conventions used in every model:
+- region codes trimmed; `region_type` = first two letters (`GM`, `PV`, `LD`, `NL`, plus `CR`/`AM` where CBS publishes them);
+- `year` = integer from `YYYYJJ00`; non-yearly periods are dropped;
+- CBS units converted: `1 000 euro` → euro (`_eur`), `x 1 000` households → count (`households_count`);
+- historical GM codes are kept as published (reporting-year boundaries); mapping to 2026 happens downstream (D-007).
