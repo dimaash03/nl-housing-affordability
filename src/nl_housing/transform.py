@@ -119,18 +119,22 @@ def load_models(root: Path = config.REPO_ROOT) -> list[Model]:
     return [model for models in load_plan(root).values() for model in models]
 
 
-def model_select(con: duckdb.DuckDBPyConnection, model: Model) -> str:
-    """Return the model's SQL after checking that it is exactly one SELECT statement."""
-    text = model.path.read_text(encoding="utf-8")
+def single_select(con: duckdb.DuckDBPyConnection, text: str, label: str) -> str:
+    """Return ``text`` without a trailing semicolon after checking it is exactly one SELECT."""
     try:
         statements = con.extract_statements(text)
     except duckdb.Error as exc:
-        raise TransformError(f"{model.path.name}: cannot parse SQL: {exc}") from exc
+        raise TransformError(f"{label}: cannot parse SQL: {exc}") from exc
     if len(statements) != 1 or statements[0].type != duckdb.StatementType.SELECT:
         kinds = [s.type.name for s in statements]
-        raise TransformError(f"{model.path.name}: expected exactly one SELECT statement, found {kinds}")
+        raise TransformError(f"{label}: expected exactly one SELECT statement, found {kinds}")
     # Drop a trailing semicolon so the text can be embedded in CREATE TABLE ... AS.
     return text.strip().rstrip(";")
+
+
+def model_select(con: duckdb.DuckDBPyConnection, model: Model) -> str:
+    """Return the model's SQL after checking that it is exactly one SELECT statement."""
+    return single_select(con, model.path.read_text(encoding="utf-8"), model.path.name)
 
 
 def run(root: Path = config.REPO_ROOT, db_path: Path | None = None) -> dict[str, int]:

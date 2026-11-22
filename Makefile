@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV   := .venv
 BIN    := $(VENV)/bin
 
-.PHONY: setup ingest load transform test lint format clean-data help
+.PHONY: setup ingest load transform check test lint format clean-data help
 
 help:  ## Show available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -21,6 +21,9 @@ load:  ## Load data/raw/ into data/nl_housing.duckdb (schema raw)
 
 transform:  ## Build the SQL models (sql/models.yaml order) into schemas staging / marts
 	$(BIN)/python -m nl_housing.transform
+
+check:  ## Run the SQL data tests (sql/tests/*.sql) against the built database
+	$(BIN)/python -m nl_housing.check
 
 test:  ## Run the offline unit tests
 	$(BIN)/python -m pytest
