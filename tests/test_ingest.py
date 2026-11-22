@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+import requests
 
 from nl_housing import ingest
 from nl_housing.config import TableConfig
@@ -11,8 +12,9 @@ from conftest import TABLE_ID, FakeSession, make_routes
 
 
 def test_urls():
-    assert ingest.api_url("83625NED", "DataProperties") == \
-        "https://opendata.cbs.nl/ODataApi/odata/83625NED/DataProperties"
+    assert (
+        ingest.api_url("83625NED", "DataProperties") == "https://opendata.cbs.nl/ODataApi/odata/83625NED/DataProperties"
+    )
     assert ingest.feed_url("83625NED") == "https://opendata.cbs.nl/ODataFeed/odata/83625NED/TypedDataSet"
     assert ingest.api_url("X1", catalog="dataderden.cbs.nl").startswith("https://dataderden.cbs.nl/")
 
@@ -29,8 +31,11 @@ def test_download_table_writes_expected_layout(repo_root: Path):
 
     assert out == repo_root / "data" / "raw" / TABLE_ID
     expected = {
-        "typed_dataset.parquet", "data_properties.parquet", "table_infos.parquet",
-        "dimensions/RegioS.parquet", "dimensions/Perioden.parquet",
+        "typed_dataset.parquet",
+        "data_properties.parquet",
+        "table_infos.parquet",
+        "dimensions/RegioS.parquet",
+        "dimensions/Perioden.parquet",
         "metadata.json",
     }
     assert {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()} == expected
@@ -68,7 +73,7 @@ def test_download_is_idempotent_and_force_redownloads(repo_root: Path):
 def test_failed_download_leaves_no_partial_output(repo_root: Path):
     routes = make_routes()
     del routes[f"https://opendata.cbs.nl/ODataFeed/odata/{TABLE_ID}/TypedDataSet"]
-    with pytest.raises(Exception):
+    with pytest.raises(requests.HTTPError):  # FakeSession answers 404 for the missing feed
         ingest.download_table(TableConfig(id=TABLE_ID), root=repo_root, session=FakeSession(routes))
     assert list((repo_root / "data" / "raw").iterdir()) == []
     assert not ingest.is_downloaded(TABLE_ID, repo_root)

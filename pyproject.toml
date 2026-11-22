@@ -18,3 +18,16 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-ra"
+
+[tool.ruff]
+line-length = 120          # the codebase is written to 120 columns
+target-version = "py310"   # minimum supported Python (requires-python)
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E/W pycodestyle, F pyflakes, I isort, B bugbear, UP pyupgrade, N pep8-naming, SIM simplify
+select = ["E", "W", "F", "I", "B", "UP", "N", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["nl_housing"]
+known-local-folder = ["conftest"]
