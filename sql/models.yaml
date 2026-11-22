@@ -17,4 +17,6 @@ staging:
   - stg_cbs__house_price_index
   - stg_cbs__regions_history
 
-marts: []
+marts:
+  # Marts read from staging (and committed reference files under data/reference/).
+  - fct_affordability
