@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 
@@ -109,6 +110,8 @@ def test_run_end_to_end_writes_files_to_tmp_path(tmp_path: Path):
     assert meta["files"]["geojson"]["bytes"] == paths["geojson"].stat().st_size
     assert meta["files"]["geojson"]["path"] == "data/reference/municipalities_2026.geojson"
     assert meta["simplification"]["new_holes"] == 0
+    assert set(meta["output_checks"]) == {"geojson", "topojson"}
+    assert all(c["new_holes"] == 0 for c in meta["output_checks"].values())
     assert not list(paths["geojson"].parent.glob(".*.tmp"))
 
 
@@ -131,3 +134,93 @@ def test_cli_returns_1_on_validation_error(monkeypatch):
 
     monkeypatch.setattr(geo, "run", fail)
     assert geo.main([]) == 1
+
+
+# --- QA G-3: holes are matched one by one ----------------------------------------
+
+
+def _square(x0: float, y0: float, size: float, code: str, hole: tuple[float, float, float] | None = None) -> dict:
+    shell = [[x0, y0], [x0 + size, y0], [x0 + size, y0 + size], [x0, y0 + size], [x0, y0]]
+    rings = [shell]
+    if hole:
+        hx, hy, hs = hole
+        rings.append([[hx, hy], [hx, hy + hs], [hx + hs, hy + hs], [hx + hs, hy], [hx, hy]])
+    return {
+        "type": "Feature",
+        "properties": {"statcode": code, "statnaam": code},
+        "geometry": {"type": "Polygon", "coordinates": rings},
+    }
+
+
+def test_closing_one_hole_does_not_hide_a_new_gap():
+    """Net hole count stays 1 -> 1, but the hole moved: one closed, one new gap -> not ok."""
+    # Two 1 km squares side by side; a 100 m enclave hole inside the left one.
+    original = geo.feature_collection(
+        [_square(0, 0, 1000, "GM0001", hole=(200, 200, 100)), _square(1000, 0, 1000, "GM0002")]
+    )
+    # "Simplified": the enclave is filled, and the right square has a new 100 m hole (a gap).
+    simplified = geo.feature_collection(
+        [_square(0, 0, 1000, "GM0001"), _square(1000, 0, 1000, "GM0002", hole=(1500, 500, 100))]
+    )
+    report = geo.topology_check(original, simplified)
+    assert report.holes_before == report.holes_after == 1
+    assert report.new_holes == 1 and report.closed_holes == 1
+    assert not report.ok
+
+
+def test_hole_that_only_changes_shape_is_not_new():
+    original = geo.feature_collection([_square(0, 0, 1000, "GM0001", hole=(200, 200, 100))])
+    shifted = geo.feature_collection([_square(0, 0, 1000, "GM0001", hole=(210, 200, 100))])
+    report = geo.topology_check(original, shifted)
+    assert report.new_holes == 0 and report.closed_holes == 0 and report.ok
+
+
+# --- QA G-4: the written files are checked after rounding ------------------------
+
+
+def test_decoded_topojson_matches_the_geojson(small_fc):
+    wgs84 = geo.reproject(geo.simplify_shared_borders(small_fc, 50))
+    decoded = geo.decode_topojson(geo.topojson_text(wgs84))
+    assert [f["properties"]["statcode"] for f in decoded["features"]] == [
+        f["properties"]["statcode"] for f in wgs84["features"]
+    ]
+    for a, b in zip(decoded["features"], wgs84["features"], strict=True):
+        ga, gb = shape(a["geometry"]), shape(b["geometry"])
+        assert ga.is_valid
+        # Quantization grid ~0.3 m: along a ~20 km perimeter that moves < 0.01 % of the area.
+        assert ga.symmetric_difference(gb).area < 1e-4 * gb.area
+    report, problems = geo.check_output(decoded, small_fc, "TopoJSON")
+    assert problems == [] and report.ok
+
+
+def test_check_output_flags_invalid_and_missing_features(small_fc):
+    wgs84 = geo.reproject(small_fc)
+    bowtie = copy.deepcopy(wgs84)
+    ring = [list(p) for p in bowtie["features"][0]["geometry"]["coordinates"][0]]
+    ring[1], ring[2] = ring[2], ring[1]  # self-intersecting ring
+    bowtie["features"][0]["geometry"] = {"type": "Polygon", "coordinates": [ring]}
+    _, problems = geo.check_output(bowtie, small_fc, "GeoJSON")
+    assert any("invalid geometr" in p and "GM0001" in p for p in problems)
+
+    dropped = geo.feature_collection(wgs84["features"][1:])
+    _, problems = geo.check_output(dropped, small_fc, "GeoJSON")
+    assert problems and "GM0001" in problems[0]
+
+
+def test_build_outputs_skips_a_tolerance_whose_rounded_output_is_invalid(small_fc, monkeypatch):
+    real = geo.check_output
+    calls: list[float] = []
+
+    def fail_first_tolerance(fc, fc_rd, label):
+        report, problems = real(fc, fc_rd, label)
+        calls.append(label)
+        return report, (problems + ["forced"]) if len(calls) <= 2 else problems
+
+    monkeypatch.setattr(geo, "check_output", fail_first_tolerance)
+    result = geo.build_outputs(small_fc, max_bytes=10**9, tolerances=(10, 50))
+    assert result.tolerance_m == 50
+    assert set(result.output_reports) == {"geojson", "topojson"}
+
+    monkeypatch.setattr(geo, "check_output", lambda fc, fc_rd, label: (real(fc, fc_rd, label)[0], ["broken"]))
+    with pytest.raises(geo.GeoValidationError, match="Rejected after rounding"):
+        geo.build_outputs(small_fc, max_bytes=10**9, tolerances=(10,))

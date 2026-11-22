@@ -38,6 +38,9 @@ Pipeline and the reasons behind each step:
 6. **Reproject to WGS84** (EPSG:4326, lon/lat, required by GeoJSON RFC 7946 and by
    Power BI) and round to 5 decimals (~1 m), then build the TopoJSON from the same
    simplified coordinates.
+7. **Check the files as written**: the GeoJSON and the decoded TopoJSON must have the
+   same municipalities in the same order, valid geometries, and no new gaps/overlaps
+   (projected back to RD New). Otherwise the next tolerance is tried.
 
 Usage::
 
@@ -211,6 +214,21 @@ def _retry_after(resp: Any) -> float | None:
         return None
 
 
+_CRS_URI = re.compile(r"/crs/([^/]+)/[^/]+/([^/>\s]+)")
+
+
+def _crs_matches(requested: str, content_crs: str) -> bool:
+    """True if the ``Content-Crs`` header (``<uri>``) names the same authority and code as ``requested``.
+
+    Compares ``EPSG`` + ``28992`` rather than the full URI, so ``http``/``https`` or a version
+    segment do not matter, but ``OGC/1.3/CRS84`` never matches ``EPSG/0/28992``.
+    """
+    want, got = _CRS_URI.search(requested), _CRS_URI.search(content_crs)
+    if not want or not got:
+        return requested.rsplit("/", 1)[-1] in content_crs
+    return (want.group(1).upper(), want.group(2)) == (got.group(1).upper(), got.group(2))
+
+
 def _next_link(payload: dict[str, Any]) -> str | None:
     """``href`` of the ``rel="next"`` link (OGC API Features paging), if any."""
     for link in payload.get("links") or []:
@@ -269,7 +287,10 @@ def fetch_features(
         page_features = payload.get("features") or []
         features.extend(page_features)
         number_matched = payload.get("numberMatched", number_matched)
-        content_crs = (getattr(resp, "headers", None) or {}).get("Content-Crs", content_crs)
+        page_crs = (getattr(resp, "headers", None) or {}).get("Content-Crs")
+        if page_crs and not _crs_matches(crs, page_crs):  # checked per page (QA G-6)
+            raise GeoValidationError(f"Requested CRS {crs} but page {pages} has Content-Crs {page_crs}")
+        content_crs = page_crs or content_crs
         logger.info("Page %d: %d feature(s) (total %d)", pages, len(page_features), len(features))
 
         next_url = _next_link(payload)
@@ -281,8 +302,6 @@ def fetch_features(
         if next_url:
             seen_next.add(next_url)
 
-    if content_crs and crs.rsplit("/", 1)[-1] not in content_crs:
-        raise GeoValidationError(f"Requested CRS {crs} but the server returned Content-Crs {content_crs}")
     if number_matched is not None and number_matched != len(features):
         raise GeoValidationError(f"numberMatched={number_matched} but {len(features)} features were downloaded")
     logger.info("Downloaded %d feature(s) for jaarcode=%d in %d page(s)", len(features), year, pages)
@@ -411,7 +430,12 @@ def simplify_shared_borders(fc: dict[str, Any], tolerance: float) -> dict[str, A
 
 @dataclass(frozen=True)
 class TopologyReport:
-    """Gaps/overlaps between neighbours before vs after simplification (RD New, m^2)."""
+    """Gaps/overlaps between neighbours before vs after simplification (RD New, m^2).
+
+    Holes are matched one by one (QA G-3): a hole of the simplified union is *new* if it
+    does not overlap any hole of the original union, so closing an existing hole (an
+    enclave, a lake outside every municipality) cannot hide a gap opened elsewhere.
+    """
 
     overlap_before_m2: float
     overlap_after_m2: float
@@ -419,18 +443,16 @@ class TopologyReport:
     holes_after: int
     max_area_change_pct: float
     max_area_change_code: str
+    new_holes: int = 0
+    closed_holes: int = 0
 
     @property
     def overlap_increase_m2(self) -> float:
         return self.overlap_after_m2 - self.overlap_before_m2
 
     @property
-    def new_holes(self) -> int:
-        return self.holes_after - self.holes_before
-
-    @property
     def ok(self) -> bool:
-        return self.overlap_increase_m2 <= MAX_OVERLAP_INCREASE_M2 and self.new_holes <= 0
+        return self.overlap_increase_m2 <= MAX_OVERLAP_INCREASE_M2 and self.new_holes == 0
 
 
 def _geometries(fc: dict[str, Any]) -> list[Any]:
@@ -440,16 +462,31 @@ def _geometries(fc: dict[str, Any]) -> list[Any]:
     return [shapely.make_valid(shape(f["geometry"])) for f in fc["features"]]
 
 
-def _overlap_and_holes(geoms: list[Any]) -> tuple[float, int]:
-    """(sum of areas - area of union, number of interior rings in the union > MIN_HOLE_AREA_M2)."""
+def _overlap_and_holes(geoms: list[Any]) -> tuple[float, list[Any]]:
+    """(sum of areas - area of union, interior rings of the union larger than MIN_HOLE_AREA_M2 as polygons)."""
     shapely, _, _ = _require_geo()
     from shapely.geometry import Polygon
 
     union = shapely.union_all(geoms)
     overlap = sum(g.area for g in geoms) - union.area
     polygons = [g for g in getattr(union, "geoms", [union]) if isinstance(g, Polygon)]
-    holes = sum(1 for p in polygons for ring in p.interiors if Polygon(ring).area > MIN_HOLE_AREA_M2)
+    holes = [h for p in polygons for ring in p.interiors if (h := Polygon(ring)).area > MIN_HOLE_AREA_M2]
     return max(overlap, 0.0), holes
+
+
+def _unmatched(holes: list[Any], others: list[Any]) -> int:
+    """Number of ``holes`` that share no area (> MIN_HOLE_AREA_M2) with any of ``others``."""
+    shapely, _, _ = _require_geo()
+
+    if not others:
+        return len(holes)
+    tree = shapely.STRtree(others)
+    count = 0
+    for hole in holes:
+        candidates = [others[i] for i in tree.query(hole)]
+        if not any(hole.intersection(o).area > MIN_HOLE_AREA_M2 for o in candidates):
+            count += 1
+    return count
 
 
 def topology_check(original: dict[str, Any], simplified: dict[str, Any]) -> TopologyReport:
@@ -465,13 +502,24 @@ def topology_check(original: dict[str, Any], simplified: dict[str, Any]) -> Topo
         raise GeoValidationError(f"Simplification changed the feature count: {len(before)} -> {len(after)}")
     overlap_before, holes_before = _overlap_and_holes(before)
     overlap_after, holes_after = _overlap_and_holes(after)
+    new_holes = _unmatched(holes_after, holes_before)
+    closed_holes = _unmatched(holes_before, holes_after)
 
     changes = [
         (abs(a.area - b.area) / b.area * 100 if b.area else 0.0, _code(f))
         for b, a, f in zip(before, after, original["features"], strict=True)
     ]
     max_change, max_code = max(changes, default=(0.0, ""))
-    return TopologyReport(overlap_before, overlap_after, holes_before, holes_after, max_change, max_code)
+    return TopologyReport(
+        overlap_before,
+        overlap_after,
+        len(holes_before),
+        len(holes_after),
+        max_change,
+        max_code,
+        new_holes=new_holes,
+        closed_holes=closed_holes,
+    )
 
 
 def reproject(
@@ -527,6 +575,77 @@ def topojson_text(fc: dict[str, Any], quantization: float = TOPO_QUANTIZATION) -
     return json.dumps(data, separators=(",", ":"), ensure_ascii=False)
 
 
+def decode_topojson(text: str, object_name: str = TOPO_OBJECT_NAME) -> dict[str, Any]:
+    """Decode a TopoJSON text back into a GeoJSON FeatureCollection (spec 1.0: delta-encoded arcs).
+
+    Used to check the file that is actually written (QA G-4): what Power BI reads is the
+    quantized TopoJSON, not the GeoJSON it was built from. Each feature gets
+    ``properties["statcode"]`` from the geometry ``id`` if the properties lack it.
+    """
+    topo = json.loads(text)
+    transform = topo.get("transform")
+    sx, sy = transform["scale"] if transform else (1.0, 1.0)
+    tx, ty = transform["translate"] if transform else (0.0, 0.0)
+
+    arcs: list[list[list[float]]] = []
+    for arc in topo["arcs"]:
+        points, x, y = [], 0.0, 0.0
+        for px, py, *_ in arc:
+            if transform:
+                x, y = x + px, y + py  # delta-encoded integers
+                points.append([x * sx + tx, y * sy + ty])
+            else:
+                points.append([px, py])
+        arcs.append(points)
+
+    def ring(indexes: list[int]) -> list[list[float]]:
+        coords: list[list[float]] = []
+        for i in indexes:
+            arc = arcs[i] if i >= 0 else arcs[~i][::-1]
+            coords.extend(arc if not coords else arc[1:])  # consecutive arcs share their end point
+        return coords
+
+    features = []
+    for g in topo["objects"][object_name]["geometries"]:
+        if g.get("type") == "Polygon":
+            geometry = {"type": "Polygon", "coordinates": [ring(r) for r in g["arcs"]]}
+        elif g.get("type") == "MultiPolygon":
+            geometry = {"type": "MultiPolygon", "coordinates": [[ring(r) for r in poly] for poly in g["arcs"]]}
+        else:
+            geometry = {"type": g.get("type"), "coordinates": []}
+        props = dict(g.get("properties") or {})
+        props.setdefault("statcode", g.get("id"))
+        features.append({"type": "Feature", "properties": props, "geometry": geometry})
+    return feature_collection(features)
+
+
+def check_output(fc_wgs84: dict[str, Any], fc_rd: dict[str, Any], label: str) -> tuple[TopologyReport, list[str]]:
+    """Validate a written output (after rounding / quantization) against the RD New source.
+
+    Returns ``(topology report, problems)``. Problems: a different feature list or order,
+    invalid geometries, or gaps/overlaps between neighbours after projecting the output
+    back to RD New (so the thresholds stay in m^2).
+    """
+    problems: list[str] = []
+    codes_out = [_code(f) for f in fc_wgs84["features"]]
+    codes_src = [_code(f) for f in fc_rd["features"]]
+    if codes_out != codes_src:
+        missing = sorted(set(codes_src) - set(codes_out))[:10]
+        problems.append(f"{label}: statcodes differ from the source (missing: {', '.join(missing) or 'none'})")
+        return topology_check(fc_rd, fc_rd), problems  # geometries cannot be paired; report is not meaningful
+
+    invalid = count_invalid(fc_wgs84)
+    if invalid:
+        problems.append(f"{label}: {len(invalid)} invalid geometr(y/ies): {', '.join(invalid[:10])}")
+    report = topology_check(fc_rd, reproject(fc_wgs84, src="EPSG:4326", dst="EPSG:28992", decimals=3))
+    if not report.ok:
+        problems.append(
+            f"{label}: gaps/overlaps after rounding (overlap +{report.overlap_increase_m2:.0f} m2, "
+            f"new holes {report.new_holes})"
+        )
+    return report, problems
+
+
 @dataclass
 class BuildResult:
     geojson: str
@@ -534,6 +653,8 @@ class BuildResult:
     tolerance_m: float
     report: TopologyReport
     invalid_codes: list[str]
+    #: Checks of the written files themselves (after rounding / quantization), QA G-4.
+    output_reports: dict[str, TopologyReport] = field(default_factory=dict)
 
     @property
     def geojson_bytes(self) -> int:
@@ -552,7 +673,14 @@ def build_outputs(
     quantization: float = TOPO_QUANTIZATION,
 ) -> BuildResult:
     """Try ``tolerances`` in order; return the first result whose GeoJSON and TopoJSON
-    are both below ``max_bytes`` and that passes :func:`topology_check`."""
+    are both below ``max_bytes`` and that passes :func:`topology_check`.
+
+    The simplified RD New geometry must pass the topology check (a failure there means
+    the source does not share vertices, so a coarser tolerance would not help: raise).
+    The two output files are then checked as written (:func:`check_output`): if rounding
+    or quantization breaks them, the next tolerance is tried, and the run fails if none passes.
+    """
+    rejected: list[str] = []
     for tol in tolerances:
         t0 = time.perf_counter()
         simplified_rd = simplify_shared_borders(fc_rd, tol)
@@ -577,15 +705,25 @@ def build_outputs(
                 f"(overlap +{report.overlap_increase_m2:.0f} m2, new holes {report.new_holes}). "
                 "Check that neighbouring polygons share identical vertices in the source."
             )
-        if result.geojson_bytes < max_bytes and result.topojson_bytes < max_bytes:
-            if result.invalid_codes:
-                logger.warning(
-                    "%d invalid geometr(y/ies) after rounding: %s",
-                    len(result.invalid_codes),
-                    ", ".join(result.invalid_codes[:10]),
-                )
-            return result
-    raise GeoValidationError(f"No tolerance in {list(tolerances)} m gives files below {_human(max_bytes)}")
+        if result.geojson_bytes >= max_bytes or result.topojson_bytes >= max_bytes:
+            continue
+        problems: list[str] = []
+        for label, fc_out in (
+            ("GeoJSON", json.loads(result.geojson)),
+            ("TopoJSON", decode_topojson(result.topojson)),
+        ):
+            out_report, out_problems = check_output(fc_out, fc_rd, label)
+            result.output_reports[label.lower()] = out_report
+            problems.extend(out_problems)
+        if problems:
+            logger.warning("tolerance %g m rejected after rounding: %s", tol, "; ".join(problems))
+            rejected.append(f"{tol} m: " + "; ".join(problems))
+            continue
+        return result
+    detail = f" Rejected after rounding: {' | '.join(rejected)}" if rejected else ""
+    raise GeoValidationError(
+        f"No tolerance in {list(tolerances)} m gives valid files below {_human(max_bytes)}.{detail}"
+    )
 
 
 def _human(n_bytes: int) -> str:
@@ -676,9 +814,18 @@ def run(
             "tolerance_m": result.tolerance_m,
             "overlap_increase_m2": round(result.report.overlap_increase_m2, 1),
             "new_holes": result.report.new_holes,
+            "closed_holes": result.report.closed_holes,
             "max_area_change_pct": round(result.report.max_area_change_pct, 3),
             "max_area_change_statcode": result.report.max_area_change_code,
             "invalid_geometries": result.invalid_codes,
+        },
+        "output_checks": {
+            kind: {
+                "overlap_increase_m2": round(rep.overlap_increase_m2, 1),
+                "new_holes": rep.new_holes,
+                "max_area_change_pct": round(rep.max_area_change_pct, 3),
+            }
+            for kind, rep in result.output_reports.items()
         },
         "output_crs": "EPSG:4326 (lon, lat)",
         "coordinate_decimals": COORD_DECIMALS,

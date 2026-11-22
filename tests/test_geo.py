@@ -80,6 +80,27 @@ def test_fetch_checks_content_crs(features):
         geo.fetch_features(2026, session=session, page_size=10)
 
 
+def test_fetch_checks_content_crs_on_every_page(features):
+    """QA G-6: a wrong CRS on a middle page must fail even if the last page is right."""
+    good = {"Content-Crs": "<http://www.opengis.net/def/crs/EPSG/0/28992>"}
+    bad = {"Content-Crs": "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>"}
+
+    class PerPageCrs(RoutedSession):
+        def get(self, url, params=None, timeout=None):
+            resp = super().get(url, params, timeout)
+            resp.headers = bad if len(self.calls) == 2 else good
+            return resp
+
+    with pytest.raises(geo.GeoValidationError, match="page 2 has Content-Crs"):
+        geo.fetch_features(2026, session=PerPageCrs(pages(features, page_size=100)), page_size=100)
+
+
+def test_crs_matching_ignores_scheme_but_not_code():
+    assert geo._crs_matches(geo.CRS_RD_NEW, "<https://www.opengis.net/def/crs/EPSG/0/28992>")
+    assert not geo._crs_matches(geo.CRS_RD_NEW, "<http://www.opengis.net/def/crs/EPSG/0/4326>")
+    assert not geo._crs_matches(geo.CRS_RD_NEW, "<http://www.opengis.net/def/crs/OGC/1.3/CRS84>")
+
+
 def test_fetch_rejects_non_feature_collection():
     session = RoutedSession({ITEMS_URL: {"type": "Feature"}})
     with pytest.raises(geo.GeoValidationError, match="FeatureCollection"):
