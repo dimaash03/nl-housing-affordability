@@ -80,3 +80,27 @@ def test_sensitivity_and_summary():
     assert stats["municipality_years_harmonised"] == 1  # only GM0001 has more than one source code
     assert stats["households"]["max_abs_pct"] == pytest.approx(25.0)
     assert stats["households"]["max_at"] == "GM0001 2015"
+
+
+def test_loaders_drop_pseudo_municipalities(tmp_path):
+    """QA H-7: GM0998 Buitenland / GM0999 never enter prices or weights (D-023)."""
+    price_dir = tmp_path / "data" / "raw" / h.PRICE_TABLE
+    key_dir = tmp_path / "data" / "raw" / ws.KEY_FIGURES_TABLE
+    price_dir.mkdir(parents=True)
+    key_dir.mkdir(parents=True)
+    codes = ["GM0363  ", "GM0998  ", "GM0999  ", "NL01  "]
+    pd.DataFrame(
+        {"RegioS": codes, "Perioden": ["2020JJ00"] * 4, "GemiddeldeVerkoopprijs_1": [1.0, 2.0, 3.0, 4.0]}
+    ).to_parquet(price_dir / "typed_dataset.parquet")
+    pd.DataFrame(
+        {
+            "RegioS": codes,
+            "Perioden": ["2020JJ00"] * 4,
+            "Woningvoorraad_59": [10.0] * 4,
+            "Koopwoningen_64": [50.0] * 4,
+            "TotaalParticuliereHuishoudens_51": [5.0] * 4,
+        }
+    ).to_parquet(key_dir / "typed_dataset.parquet")
+
+    assert ws.load_prices(2011, 2025, root=tmp_path)["code"].tolist() == ["GM0363"]
+    assert ws.load_weights(2011, 2025, root=tmp_path)["code"].tolist() == ["GM0363"]

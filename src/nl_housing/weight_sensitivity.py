@@ -55,6 +55,11 @@ RESEARCH_AMSTERDAM = {2019: 481_422, 2020: 507_388, 2021: 564_658, 2022: 617_736
 # --- Inputs ------------------------------------------------------------------
 
 
+def _municipal(codes: pd.Series) -> pd.Series:
+    """GM codes, without the pseudo-municipalities GM0998/GM0999 (D-023, QA H-7)."""
+    return codes.str.startswith("GM") & ~codes.isin(harmonise.PSEUDO_CODES)
+
+
 def load_prices(start_year: int, end_year: int, root: Path = config.REPO_ROOT) -> pd.DataFrame:
     """``[code, year, price]`` for GM codes with a price in ``83625NED``."""
     df = pd.read_parquet(
@@ -62,7 +67,7 @@ def load_prices(start_year: int, end_year: int, root: Path = config.REPO_ROOT) -
         columns=["RegioS", "Perioden", "GemiddeldeVerkoopprijs_1"],
     )
     df = df.assign(code=df["RegioS"].str.strip(), year=df["Perioden"].str[:4].astype(int))
-    df = df[df["code"].str.startswith("GM") & df["year"].between(start_year, end_year)]
+    df = df[_municipal(df["code"]) & df["year"].between(start_year, end_year)]
     df = df.dropna(subset=["GemiddeldeVerkoopprijs_1"])
     return df.rename(columns={"GemiddeldeVerkoopprijs_1": "price"})[["code", "year", "price"]].reset_index(drop=True)
 
@@ -72,7 +77,7 @@ def load_weights(start_year: int, end_year: int, root: Path = config.REPO_ROOT) 
     cols = ["RegioS", "Perioden", "Woningvoorraad_59", "Koopwoningen_64", "TotaalParticuliereHuishoudens_51"]
     df = pd.read_parquet(harmonise._table_dir(KEY_FIGURES_TABLE, root) / "typed_dataset.parquet", columns=cols)
     df = df.assign(code=df["RegioS"].str.strip(), year=df["Perioden"].str[:4].astype(int))
-    df = df[df["code"].str.startswith("GM") & df["year"].between(start_year, end_year)]
+    df = df[_municipal(df["code"]) & df["year"].between(start_year, end_year)]
     return pd.DataFrame(
         {
             "code": df["code"],
