@@ -1,0 +1,12 @@
+# Execution order of the SQL models, read by `python -m nl_housing.transform`.
+#
+# - Each top-level key is a layer = a folder under sql/ = a DuckDB schema.
+#   Layers run in the order written here (staging before marts).
+# - Within a layer, models run in the order listed. List a model AFTER every model it selects from.
+# - Model name = file stem = table name: sql/staging/stg_cbs__cpi.sql -> staging.stg_cbs__cpi
+# - Every .sql file in a layer folder must be listed, and every listed model must exist;
+#   the runner fails otherwise, so this file cannot silently drift from the folder.
+
+staging: []
+
+marts: []
