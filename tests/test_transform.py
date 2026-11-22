@@ -99,6 +99,16 @@ def test_failure_rolls_back_all_models(project: Path):
     assert _query(project, "select count(*) from staging.stg_a") == [(2,)]
 
 
+def test_relative_paths_resolve_against_repo_root(project: Path, monkeypatch: pytest.MonkeyPatch, tmp_path_factory):
+    """A model may read a committed reference file by repo-relative path, whatever the working directory."""
+    (project / "data" / "reference").mkdir(parents=True)
+    (project / "data" / "reference" / "ref.csv").write_text("code,w\nGM0363,0.5\n")
+    (project / "sql" / "marts" / "dim_x.sql").write_text("select code, w from read_csv('data/reference/ref.csv')")
+    monkeypatch.chdir(tmp_path_factory.mktemp("elsewhere"))
+    transform.run(root=project)
+    assert _query(project, "select code, w from marts.dim_x") == [("GM0363", 0.5)]
+
+
 def test_missing_database_raises(project: Path):
     config.duckdb_path(project).unlink()
     with pytest.raises(TransformError, match="make load"):
