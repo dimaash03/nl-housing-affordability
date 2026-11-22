@@ -1,0 +1,6 @@
+# Exact versions of the geo extras the boundary build was last tested with (QA G-5).
+# Install on top of requirements.lock:  pip install -r requirements-geo.lock   (or: make setup-geo)
+# Generated with `make lock` on Python 3.13.18, Linux, 2026-11-22.
+pyproj==3.8.0
+shapely==2.2.0
+topojson==2.2
