@@ -56,9 +56,9 @@ logger = logging.getLogger(__name__)
 
 # --- Constants ---------------------------------------------------------------
 
-REORG_TABLE = "70739ned"   # Gebieden; overzicht vanaf 1830 (RegioS descriptions)
+REORG_TABLE = "70739ned"  # Gebieden; overzicht vanaf 1830 (RegioS descriptions)
 TARGET_TABLE = "86247NED"  # Gebieden in Nederland 2026 (342 municipalities)
-PRICE_TABLE = "83625NED"   # average sale prices (defines which codes must be covered)
+PRICE_TABLE = "83625NED"  # average sale prices (defines which codes must be covered)
 
 DEFAULT_START_YEAR = 2011
 DEFAULT_END_YEAR = 2025
@@ -180,7 +180,7 @@ def _parse_abolition(lines: list[str], start: int) -> tuple[date, list[Receiver]
 def _parse_receivers(lines: list[str], start: int) -> list[Receiver]:
     """Parse the ``- <name> (GMxxxx),`` / ``... <numbers>`` pairs after the header at ``lines[start]``."""
     receivers: list[dict] = []
-    for line in lines[start + 1:]:
+    for line in lines[start + 1 :]:
         # A block ends at a blank line, a lone "." (used as separator in 5 records,
         # e.g. GM0311 Breukelen), the next event header or the start-date line.
         if line in ("", ".") or _BLOCK_HEADER_RE.match(line) or line.startswith("Begindatum"):
@@ -218,9 +218,18 @@ def boundary_corrections(regions: pd.DataFrame, since: date) -> pd.DataFrame:
             for r in _parse_receivers(lines, i):
                 if r.code in PSEUDO_CODES:  # e.g. Eijsden-Margraten <-> abroad (2018, 0 inhabitants)
                     continue
-                rows.append({"from_code": code, "from_name": str(title).strip(), "to_code": r.code,
-                             "to_name": r.name, "effective_date": eff, "hectares": r.hectares,
-                             "dwellings": r.dwellings, "inhabitants": r.inhabitants})
+                rows.append(
+                    {
+                        "from_code": code,
+                        "from_name": str(title).strip(),
+                        "to_code": r.code,
+                        "to_name": r.name,
+                        "effective_date": eff,
+                        "hectares": r.hectares,
+                        "dwellings": r.dwellings,
+                        "inhabitants": r.inhabitants,
+                    }
+                )
     cols = ["from_code", "from_name", "to_code", "to_name", "effective_date", "hectares", "dwellings", "inhabitants"]
     return pd.DataFrame(rows, columns=cols).sort_values(["effective_date", "from_code", "to_code"], ignore_index=True)
 
@@ -245,8 +254,11 @@ def parse_description(code: str, name: str, description: str | None) -> list[Suc
         new_code = m.group("code")
         if new_code == code:  # name change without a code change: nothing to map
             continue
-        events.append(SuccessionEvent(code, name, KIND_RENAME, _parse_date(m.group("date")),
-                                      (Receiver(code=new_code, name=m.group("name")),)))
+        events.append(
+            SuccessionEvent(
+                code, name, KIND_RENAME, _parse_date(m.group("date")), (Receiver(code=new_code, name=m.group("name")),)
+            )
+        )
     return events
 
 
@@ -266,9 +278,12 @@ def build_events(regions: pd.DataFrame) -> dict[str, SuccessionEvent]:
             raise HarmonisationError(f"{code}: more than one terminating event: {found}")
         if found:
             events[code] = found[0]
-    logger.info("Parsed %d terminating events (%d abolitions, %d code-changing renames)",
-                len(events), sum(e.kind == KIND_ABOLITION for e in events.values()),
-                sum(e.kind == KIND_RENAME for e in events.values()))
+    logger.info(
+        "Parsed %d terminating events (%d abolitions, %d code-changing renames)",
+        len(events),
+        sum(e.kind == KIND_ABOLITION for e in events.values()),
+        sum(e.kind == KIND_RENAME for e in events.values()),
+    )
     return events
 
 
@@ -300,7 +315,7 @@ def allocation_shares(event: SuccessionEvent) -> tuple[dict[str, float], str]:
 
     total = float(sum(values))
     shares: dict[str, float] = defaultdict(float)
-    for receiver, value in zip(event.receivers, values):
+    for receiver, value in zip(event.receivers, values, strict=True):
         if value > 0:
             shares[receiver.code] += value / total
         else:
@@ -316,8 +331,9 @@ class _Allocation:
     kinds: set[str] = field(default_factory=set)
 
 
-def resolve(code: str, events: dict[str, SuccessionEvent], targets: set[str],
-            _stack: tuple[str, ...] = ()) -> dict[str, _Allocation]:
+def resolve(
+    code: str, events: dict[str, SuccessionEvent], targets: set[str], _stack: tuple[str, ...] = ()
+) -> dict[str, _Allocation]:
     """Resolve ``code`` to the target list, following chains recursively.
 
     Returns ``{target_code: allocation}`` with weights that sum to 1. Raises
@@ -342,7 +358,7 @@ def resolve(code: str, events: dict[str, SuccessionEvent], targets: set[str],
             alloc.weight += share * sub.weight
             # sub-paths start with receiver_code; annotate that hop with the event date
             hop = f"{code}>{receiver_code}[{event.effective_date.isoformat()}]"
-            alloc.paths += [hop + p[len(receiver_code):] for p in sub.paths]
+            alloc.paths += [hop + p[len(receiver_code) :] for p in sub.paths]
             alloc.bases |= {basis} | sub.bases
             alloc.kinds |= {event.kind} | sub.kinds
     return dict(result)
@@ -359,8 +375,9 @@ def _round_weights(weights: dict[str, float]) -> dict[str, float]:
 # --- Mapping table -----------------------------------------------------------
 
 
-def build_mapping(codes: list[str] | set[str], events: dict[str, SuccessionEvent],
-                  targets: dict[str, str], names: dict[str, str]) -> pd.DataFrame:
+def build_mapping(
+    codes: list[str] | set[str], events: dict[str, SuccessionEvent], targets: dict[str, str], names: dict[str, str]
+) -> pd.DataFrame:
     """Build the mapping for ``codes`` (historical GM codes to cover).
 
     ``targets``: ``{code_2026: name_2026}``; ``names``: ``{code: latest name}``
@@ -393,19 +410,24 @@ def build_mapping(codes: list[str] | set[str], events: dict[str, SuccessionEvent
             else:
                 change_type = CHANGE_RENAME
             bases = sorted(alloc.bases - {"rename", "single"})  # only report the basis of real splits
-            source = (f"{TARGET_TABLE} (identity)" if event is None
-                      else f"{REORG_TABLE} RegioS.Description" + (f" (weight: {'+'.join(bases)})" if bases else ""))
-            rows.append({
-                "old_code": code,
-                "old_name": names.get(code, targets.get(code, "")),
-                "new_code_2026": target,
-                "new_name_2026": targets[target],
-                "weight": weights[target],
-                "change_type": change_type,
-                "effective_date": event.effective_date.isoformat() if event else "",
-                "source": source,
-                "resolution_path": "; ".join(sorted(alloc.paths)),
-            })
+            source = (
+                f"{TARGET_TABLE} (identity)"
+                if event is None
+                else f"{REORG_TABLE} RegioS.Description" + (f" (weight: {'+'.join(bases)})" if bases else "")
+            )
+            rows.append(
+                {
+                    "old_code": code,
+                    "old_name": names.get(code, targets.get(code, "")),
+                    "new_code_2026": target,
+                    "new_name_2026": targets[target],
+                    "weight": weights[target],
+                    "change_type": change_type,
+                    "effective_date": event.effective_date.isoformat() if event else "",
+                    "source": source,
+                    "resolution_path": "; ".join(sorted(alloc.paths)),
+                }
+            )
     if errors:
         raise HarmonisationError(f"{len(errors)} code(s) could not be resolved:\n" + "\n".join(errors))
     return pd.DataFrame(rows, columns=MAPPING_COLUMNS)
@@ -473,8 +495,9 @@ def summarise(mapping: pd.DataFrame, events: dict[str, SuccessionEvent], since: 
         "abolition_receiver_rows_since": sum(len(e.receivers) for e in abolitions),
         "abolitions_by_year": dict(sorted(Counter(e.effective_date.year for e in abolitions).items())),
         "renames_since": sorted(f"{e.old_code}->{e.receivers[0].code}" for e in recent if e.kind == KIND_RENAME),
-        "splits_since": {e.old_code: len(e.receivers) for e in sorted(abolitions, key=lambda e: e.old_code)
-                         if len(e.receivers) > 1},
+        "splits_since": {
+            e.old_code: len(e.receivers) for e in sorted(abolitions, key=lambda e: e.old_code) if len(e.receivers) > 1
+        },
     }
 
 
@@ -502,8 +525,9 @@ def load_regions(root: Path = config.REPO_ROOT) -> pd.DataFrame:
 
 def load_end_dates(root: Path = config.REPO_ROOT) -> dict[str, date | None]:
     """``Einddatum`` per GM code from the ``70739ned`` data columns (sort field YYYYMMDD)."""
-    df = pd.read_parquet(_table_dir(REORG_TABLE, root) / "typed_dataset.parquet",
-                         columns=["RegioS", "EinddatumSorteerveld_7"])
+    df = pd.read_parquet(
+        _table_dir(REORG_TABLE, root) / "typed_dataset.parquet", columns=["RegioS", "EinddatumSorteerveld_7"]
+    )
     out: dict[str, date | None] = {}
     for key, end in df.itertuples(index=False):
         code = str(key).strip()
@@ -521,12 +545,18 @@ def load_targets(root: Path = config.REPO_ROOT) -> dict[str, str]:
 
 def load_price_codes(start_year: int, end_year: int, root: Path = config.REPO_ROOT) -> set[str]:
     """GM codes with a non-missing average price in ``83625NED`` for the given years."""
-    df = pd.read_parquet(_table_dir(PRICE_TABLE, root) / "typed_dataset.parquet",
-                         columns=["RegioS", "Perioden", "GemiddeldeVerkoopprijs_1"])
+    df = pd.read_parquet(
+        _table_dir(PRICE_TABLE, root) / "typed_dataset.parquet",
+        columns=["RegioS", "Perioden", "GemiddeldeVerkoopprijs_1"],
+    )
     df["RegioS"] = df["RegioS"].str.strip()
     year = df["Perioden"].str[:4].astype(int)
-    mask = (df["RegioS"].str.startswith("GM") & ~df["RegioS"].isin(PSEUDO_CODES)
-            & year.between(start_year, end_year) & df["GemiddeldeVerkoopprijs_1"].notna())
+    mask = (
+        df["RegioS"].str.startswith("GM")
+        & ~df["RegioS"].isin(PSEUDO_CODES)
+        & year.between(start_year, end_year)
+        & df["GemiddeldeVerkoopprijs_1"].notna()
+    )
     return set(df.loc[mask, "RegioS"])
 
 
@@ -538,8 +568,9 @@ def write_mapping(mapping: pd.DataFrame, path: Path) -> Path:
     return path
 
 
-def load_mapping_to_duckdb(db_path: Path | None = None, csv_path: Path | None = None,
-                           root: Path = config.REPO_ROOT) -> int:
+def load_mapping_to_duckdb(
+    db_path: Path | None = None, csv_path: Path | None = None, root: Path = config.REPO_ROOT
+) -> int:
     """(Re)create ``reference.municipality_mapping_2026`` in DuckDB from the CSV. Returns the row count.
 
     Standalone on purpose (does not touch the raw loader). Types are explicit so
@@ -565,25 +596,38 @@ def load_mapping_to_duckdb(db_path: Path | None = None, csv_path: Path | None = 
     return int(n)
 
 
-def run(start_year: int = DEFAULT_START_YEAR, end_year: int = DEFAULT_END_YEAR,
-        root: Path = config.REPO_ROOT, output: Path | None = None) -> tuple[pd.DataFrame, dict]:
+def run(
+    start_year: int = DEFAULT_START_YEAR,
+    end_year: int = DEFAULT_END_YEAR,
+    root: Path = config.REPO_ROOT,
+    output: Path | None = None,
+) -> tuple[pd.DataFrame, dict]:
     """Regenerate the mapping CSV from ``data/raw/``. Returns the mapping and its summary."""
     regions = load_regions(root)
     events = build_events(regions)
     names = {str(k).strip(): str(t).strip() for k, t in regions[["Key", "Title"]].itertuples(index=False)}
     targets = load_targets(root)
     codes = load_price_codes(start_year, end_year, root)
-    logger.info("%d target municipalities (%s); %d GM codes with a price in %s %d-%d",
-                len(targets), TARGET_TABLE, len(codes), PRICE_TABLE, start_year, end_year)
+    logger.info(
+        "%d target municipalities (%s); %d GM codes with a price in %s %d-%d",
+        len(targets),
+        TARGET_TABLE,
+        len(codes),
+        PRICE_TABLE,
+        start_year,
+        end_year,
+    )
 
     end_dates = load_end_dates(root)
     for problem in check_end_dates(events, end_dates):
         logger.warning("End-date check: %s", problem)
     active = active_codes(end_dates)
     if active != set(targets):
-        raise HarmonisationError(f"Active codes in {REORG_TABLE} differ from {TARGET_TABLE}: "
-                                 f"only in {REORG_TABLE} {sorted(active - set(targets))}, "
-                                 f"only in {TARGET_TABLE} {sorted(set(targets) - active)}")
+        raise HarmonisationError(
+            f"Active codes in {REORG_TABLE} differ from {TARGET_TABLE}: "
+            f"only in {REORG_TABLE} {sorted(active - set(targets))}, "
+            f"only in {TARGET_TABLE} {sorted(set(targets) - active)}"
+        )
 
     mapping = build_mapping(codes, events, targets, names)
     validate_mapping(mapping, codes, set(targets))
@@ -596,8 +640,10 @@ def run(start_year: int = DEFAULT_START_YEAR, end_year: int = DEFAULT_END_YEAR,
         "inhabitants_total": int(corrections["inhabitants"].fillna(0).sum()),
         "dwellings_total": int(corrections["dwellings"].fillna(0).sum()),
         "transfers_with_100_plus_inhabitants": int((corrections["inhabitants"] >= 100).sum()),
-        "largest": [f"{r.from_code}->{r.to_code} {r.effective_date} {r.inhabitants} inh."
-                    for r in largest.itertuples(index=False)],
+        "largest": [
+            f"{r.from_code}->{r.to_code} {r.effective_date} {r.inhabitants} inh."
+            for r in largest.itertuples(index=False)
+        ],
     }
     for key, value in summary.items():
         logger.info("%s: %s", key, value)
@@ -609,8 +655,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start-year", type=int, default=DEFAULT_START_YEAR)
     parser.add_argument("--end-year", type=int, default=DEFAULT_END_YEAR)
     parser.add_argument("--output", type=Path, help=f"CSV path (default data/reference/{MAPPING_FILE_NAME})")
-    parser.add_argument("--load-duckdb", action="store_true",
-                        help=f"also load the CSV into {DUCKDB_SCHEMA}.{DUCKDB_TABLE} in data/nl_housing.duckdb")
+    parser.add_argument(
+        "--load-duckdb",
+        action="store_true",
+        help=f"also load the CSV into {DUCKDB_SCHEMA}.{DUCKDB_TABLE} in data/nl_housing.duckdb",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")

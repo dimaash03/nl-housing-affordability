@@ -57,8 +57,10 @@ RESEARCH_AMSTERDAM = {2019: 481_422, 2020: 507_388, 2021: 564_658, 2022: 617_736
 
 def load_prices(start_year: int, end_year: int, root: Path = config.REPO_ROOT) -> pd.DataFrame:
     """``[code, year, price]`` for GM codes with a price in ``83625NED``."""
-    df = pd.read_parquet(harmonise._table_dir(harmonise.PRICE_TABLE, root) / "typed_dataset.parquet",
-                         columns=["RegioS", "Perioden", "GemiddeldeVerkoopprijs_1"])
+    df = pd.read_parquet(
+        harmonise._table_dir(harmonise.PRICE_TABLE, root) / "typed_dataset.parquet",
+        columns=["RegioS", "Perioden", "GemiddeldeVerkoopprijs_1"],
+    )
     df = df.assign(code=df["RegioS"].str.strip(), year=df["Perioden"].str[:4].astype(int))
     df = df[df["code"].str.startswith("GM") & df["year"].between(start_year, end_year)]
     df = df.dropna(subset=["GemiddeldeVerkoopprijs_1"])
@@ -71,13 +73,15 @@ def load_weights(start_year: int, end_year: int, root: Path = config.REPO_ROOT) 
     df = pd.read_parquet(harmonise._table_dir(KEY_FIGURES_TABLE, root) / "typed_dataset.parquet", columns=cols)
     df = df.assign(code=df["RegioS"].str.strip(), year=df["Perioden"].str[:4].astype(int))
     df = df[df["code"].str.startswith("GM") & df["year"].between(start_year, end_year)]
-    return pd.DataFrame({
-        "code": df["code"],
-        "year": df["year"],
-        "owner_stock": df["Woningvoorraad_59"] * df["Koopwoningen_64"] / 100,
-        "dwellings": df["Woningvoorraad_59"],
-        "households": df["TotaalParticuliereHuishoudens_51"],
-    }).reset_index(drop=True)
+    return pd.DataFrame(
+        {
+            "code": df["code"],
+            "year": df["year"],
+            "owner_stock": df["Woningvoorraad_59"] * df["Koopwoningen_64"] / 100,
+            "dwellings": df["Woningvoorraad_59"],
+            "households": df["TotaalParticuliereHuishoudens_51"],
+        }
+    ).reset_index(drop=True)
 
 
 # --- Core --------------------------------------------------------------------
@@ -91,11 +95,13 @@ def _territorial_units(observations: pd.DataFrame, mapping: pd.DataFrame) -> pd.
     (mean of the non-missing values). The unit is identified by the successor code.
     """
     renames = mapping.loc[mapping["change_type"] == harmonise.CHANGE_RENAME, ["old_code", "new_code_2026"]]
-    rename_to = dict(zip(renames["old_code"], renames["new_code_2026"]))
+    rename_to = dict(zip(renames["old_code"], renames["new_code_2026"], strict=True))
     obs = observations.copy()
-    present = set(zip(obs["code"], obs["year"]))
+    present = set(zip(obs["code"], obs["year"], strict=True))
     successor = obs["code"].map(rename_to)
-    both = successor.notna() & pd.Series([(s, y) in present for s, y in zip(successor, obs["year"])], index=obs.index)
+    both = successor.notna() & pd.Series(
+        [(s, y) in present for s, y in zip(successor, obs["year"], strict=True)], index=obs.index
+    )
     if not both.any():
         return obs
     for code, year in obs.loc[both, ["code", "year"]].itertuples(index=False):
@@ -105,8 +111,9 @@ def _territorial_units(observations: pd.DataFrame, mapping: pd.DataFrame) -> pd.
     return obs.groupby(["code", "year"], as_index=False)[value_cols].mean()
 
 
-def harmonised_prices(prices: pd.DataFrame, weights: pd.DataFrame, mapping: pd.DataFrame,
-                      weight_col: str = BASELINE) -> pd.DataFrame:
+def harmonised_prices(
+    prices: pd.DataFrame, weights: pd.DataFrame, mapping: pd.DataFrame, weight_col: str = BASELINE
+) -> pd.DataFrame:
     """Average sale price per 2026 municipality and year, weighted by ``weight_col``.
 
     Returns ``[new_code_2026, year, avg_sale_price_eur, n_source_codes]``.
@@ -121,11 +128,14 @@ def harmonised_prices(prices: pd.DataFrame, weights: pd.DataFrame, mapping: pd.D
     m = mapping[["old_code", "new_code_2026", "weight"]]
     joined = obs.merge(m, left_on="code", right_on="old_code", how="left", validate="many_to_many")
     if joined["new_code_2026"].isna().any():
-        raise harmonise.HarmonisationError(f"Codes not in mapping: {sorted(joined.loc[joined['new_code_2026'].isna(), 'code'].unique())}")
+        raise harmonise.HarmonisationError(
+            f"Codes not in mapping: {sorted(joined.loc[joined['new_code_2026'].isna(), 'code'].unique())}"
+        )
     joined["w"] = joined[weight_col] * joined["weight"]
     joined["pw"] = joined["price"] * joined["w"]
     out = joined.groupby(["new_code_2026", "year"], as_index=False).agg(
-        pw=("pw", "sum"), w=("w", "sum"), n_source_codes=("code", "nunique"))
+        pw=("pw", "sum"), w=("w", "sum"), n_source_codes=("code", "nunique")
+    )
     out["avg_sale_price_eur"] = out["pw"] / out["w"]
     return out[["new_code_2026", "year", "avg_sale_price_eur", "n_source_codes"]]
 
@@ -168,12 +178,13 @@ def summarise(wide: pd.DataFrame) -> dict:
 
 def to_markdown(wide: pd.DataFrame, stats: dict, mapping: pd.DataFrame) -> str:
     """Human-readable summary (pasted into docs/harmonisation.md)."""
-    names = dict(zip(mapping["new_code_2026"], mapping["new_name_2026"]))
+    names = dict(zip(mapping["new_code_2026"], mapping["new_name_2026"], strict=True))
     lines = [
         f"Harmonised municipality-years (more than one source code): {stats['municipality_years_harmonised']} "
         f"of {stats['municipality_years_total']} ({stats['municipalities_harmonised']} municipalities).",
         "",
-        "| Alternative weight vs owner stock | max abs diff | median abs diff | p95 abs diff | share within 0.5 % | max at |",
+        "| Alternative weight vs owner stock | max abs diff | median abs diff | p95 abs diff "
+        "| share within 0.5 % | max at |",
         "|---|---:|---:|---:|---:|---|",
     ]
     for option in WEIGHT_OPTIONS:
@@ -181,16 +192,24 @@ def to_markdown(wide: pd.DataFrame, stats: dict, mapping: pd.DataFrame) -> str:
             continue
         s = stats[option]
         code, year = s["max_at"].split()
-        lines.append(f"| {option} | {s['max_abs_pct']:.2f} % | {s['median_abs_pct']:.2f} % | {s['p95_abs_pct']:.2f} % "
-                     f"| {s['share_within_0_5_pct']:.0%} | {names.get(code, code)} ({code}) {year} |")
+        lines.append(
+            f"| {option} | {s['max_abs_pct']:.2f} % | {s['median_abs_pct']:.2f} % | {s['p95_abs_pct']:.2f} % "
+            f"| {s['share_within_0_5_pct']:.0%} | {names.get(code, code)} ({code}) {year} |"
+        )
 
     ams = wide[(wide["new_code_2026"] == "GM0363") & wide["year"].isin(RESEARCH_AMSTERDAM)].sort_values("year")
-    lines += ["", "Amsterdam incl. Weesp (GM0363), euro:", "",
-              "| year | owner stock | dwellings | households | research prototype (owner stock) |",
-              "|---|---:|---:|---:|---:|"]
+    lines += [
+        "",
+        "Amsterdam incl. Weesp (GM0363), euro:",
+        "",
+        "| year | owner stock | dwellings | households | research prototype (owner stock) |",
+        "|---|---:|---:|---:|---:|",
+    ]
     for row in ams.itertuples(index=False):
-        lines.append(f"| {row.year} | {row.owner_stock:,.0f} | {row.dwellings:,.0f} | {row.households:,.0f} "
-                     f"| {RESEARCH_AMSTERDAM[row.year]:,} |".replace(",", " "))
+        lines.append(
+            f"| {row.year} | {row.owner_stock:,.0f} | {row.dwellings:,.0f} | {row.households:,.0f} "
+            f"| {RESEARCH_AMSTERDAM[row.year]:,} |".replace(",", " ")
+        )
     return "\n".join(lines) + "\n"
 
 

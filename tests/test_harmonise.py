@@ -22,8 +22,21 @@ from nl_housing import harmonise as h
 FIXTURE = Path(__file__).parent / "fixtures" / "regios_70739ned_sample.json"
 
 #: 2026 codes among the fixture municipalities (all verified in 86247NED).
-TARGETS = ["GM0074", "GM0080", "GM0363", "GM0757", "GM0824", "GM0855", "GM0865",
-           "GM1900", "GM1904", "GM1940", "GM1942", "GM1945", "GM1978"]
+TARGETS = [
+    "GM0074",
+    "GM0080",
+    "GM0363",
+    "GM0757",
+    "GM0824",
+    "GM0855",
+    "GM0865",
+    "GM1900",
+    "GM1904",
+    "GM1940",
+    "GM1942",
+    "GM1945",
+    "GM1978",
+]
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +51,7 @@ def events(regions: pd.DataFrame) -> dict[str, h.SuccessionEvent]:
 
 @pytest.fixture(scope="module")
 def names(regions: pd.DataFrame) -> dict[str, str]:
-    return dict(zip(regions["Key"], regions["Title"]))
+    return dict(zip(regions["Key"], regions["Title"], strict=True))
 
 
 @pytest.fixture(scope="module")
@@ -48,8 +61,20 @@ def targets(names: dict[str, str]) -> dict[str, str]:
 
 @pytest.fixture(scope="module")
 def mapping(events, targets, names) -> pd.DataFrame:
-    codes = ["GM0457", "GM0363", "GM0788", "GM1921", "GM1940", "GM0241", "GM0265",
-             "GM0424", "GM0055", "GM0571", "GM1927", "GM0311"]
+    codes = [
+        "GM0457",
+        "GM0363",
+        "GM0788",
+        "GM1921",
+        "GM1940",
+        "GM0241",
+        "GM0265",
+        "GM0424",
+        "GM0055",
+        "GM0571",
+        "GM1927",
+        "GM0311",
+    ]
     return h.build_mapping(codes, events, targets, names)
 
 
@@ -60,15 +85,18 @@ def rows(mapping: pd.DataFrame, code: str) -> pd.DataFrame:
 # --- Parsing -----------------------------------------------------------------
 
 
-@pytest.mark.parametrize(("text", "expected"), [
-    ("535 hectare met 918 woningen en 2149 inwoners", (535.0, 918, 2149)),
-    ("22 hectare met 1 woning en 1 inwoner", (22.0, 1, 1)),
-    ("0,17 hectare met 0 woningen en 0 inwoners", (0.17, 0, 0)),
-    ("84 hectare 12 woningen en 30 inwoners", (84.0, 12, 30)),       # "met" missing
-    ("1767 hectare met 3159 inwoners", (1767.0, None, 3159)),        # pre-1990 records
-    ("48 inwoners", (None, None, 48)),
-    ("16540 hectare met 458.397 woningen en 882.633 inwoners", (16540.0, 458397, 882633)),  # defensive
-])
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("535 hectare met 918 woningen en 2149 inwoners", (535.0, 918, 2149)),
+        ("22 hectare met 1 woning en 1 inwoner", (22.0, 1, 1)),
+        ("0,17 hectare met 0 woningen en 0 inwoners", (0.17, 0, 0)),
+        ("84 hectare 12 woningen en 30 inwoners", (84.0, 12, 30)),  # "met" missing
+        ("1767 hectare met 3159 inwoners", (1767.0, None, 3159)),  # pre-1990 records
+        ("48 inwoners", (None, None, 48)),
+        ("16540 hectare met 458.397 woningen en 882.633 inwoners", (16540.0, 458397, 882633)),  # defensive
+    ],
+)
 def test_parse_detail_line(text, expected):
     assert h.parse_detail_line(text) == expected
 
@@ -92,7 +120,11 @@ def test_parse_haaren_split_ignores_older_history(events):
     e = events["GM0788"]
     assert e.effective_date == date(2021, 1, 1)
     assert [(r.code, r.inhabitants) for r in e.receivers] == [
-        ("GM0757", 2149), ("GM0824", 5827), ("GM0855", 1442), ("GM0865", 4900)]
+        ("GM0757", 2149),
+        ("GM0824", 5827),
+        ("GM0855", 1442),
+        ("GM0865", 4900),
+    ]
 
 
 def test_parse_code_changing_renames(events):
@@ -101,15 +133,22 @@ def test_parse_code_changing_renames(events):
     assert fm.receivers[0].name == "De Fryske Marren"
     groesbeek = events["GM0241"]
     assert (groesbeek.kind, groesbeek.effective_date, groesbeek.receivers[0].code) == (
-        h.KIND_RENAME, date(2016, 1, 1), "GM1945")
+        h.KIND_RENAME,
+        date(2016, 1, 1),
+        "GM1945",
+    )
 
 
 def test_lone_dot_separator_ends_block(events, caplog):
     # GM0311 Breukelen uses "\r\n.\r\n" instead of a blank line after the abolition block.
     assert [r.code for r in events["GM0311"].receivers] == ["GM1904"]
     with caplog.at_level(logging.WARNING, logger="nl_housing.harmonise"):
-        h.parse_description("GM0311", "Breukelen", "Opgeheven per 01-01-2011, overgegaan naar:\r\n"
-                            "- Stichtse Vecht (GM1904),\r\n... 1 hectare met 1 woning en 1 inwoner\r\n.\r\n")
+        h.parse_description(
+            "GM0311",
+            "Breukelen",
+            "Opgeheven per 01-01-2011, overgegaan naar:\r\n"
+            "- Stichtse Vecht (GM1904),\r\n... 1 hectare met 1 woning en 1 inwoner\r\n.\r\n",
+        )
     assert not caplog.records
 
 
@@ -124,8 +163,10 @@ def test_rename_to_same_code_is_ignored():
 
 
 def test_multiple_terminating_events_raise():
-    desc = ("Opgeheven per 01-01-2019, overgegaan naar:\r\n- A (GM0001),\r\n... 1 hectare met 1 woning en 1 inwoner\r\n\r\n"
-            "Naamswijziging per 01-01-2018,\r\nnieuwe naam: B (GM0002)\r\n")
+    desc = (
+        "Opgeheven per 01-01-2019, overgegaan naar:\r\n- A (GM0001),\r\n... 1 hectare met 1 woning en 1 inwoner\r\n\r\n"
+        "Naamswijziging per 01-01-2018,\r\nnieuwe naam: B (GM0002)\r\n"
+    )
     regions = pd.DataFrame([{"Key": "GM9999  ", "Title": "X", "Description": desc}])
     with pytest.raises(h.HarmonisationError, match="more than one"):
         h.build_events(regions)
@@ -227,8 +268,13 @@ def test_target_with_terminating_event_raises(events):
 
 
 def test_weight_fallback_to_dwellings_when_no_inhabitants():
-    e = h.SuccessionEvent("GM0001", "A", h.KIND_ABOLITION, date(2020, 1, 1), (
-        h.Receiver("GM0002", "B", 1.0, 3, 0), h.Receiver("GM0003", "C", 1.0, 1, 0)))
+    e = h.SuccessionEvent(
+        "GM0001",
+        "A",
+        h.KIND_ABOLITION,
+        date(2020, 1, 1),
+        (h.Receiver("GM0002", "B", 1.0, 3, 0), h.Receiver("GM0003", "C", 1.0, 1, 0)),
+    )
     shares, basis = h.allocation_shares(e)
     assert basis == "dwellings" and shares == {"GM0002": 0.75, "GM0003": 0.25}
 
@@ -261,8 +307,8 @@ def test_load_mapping_to_duckdb(mapping, tmp_path):
     assert h.load_mapping_to_duckdb(db_path=db, csv_path=csv) == len(mapping)  # idempotent
     with duckdb.connect(str(db), read_only=True) as con:
         nulls, total = con.execute(
-            "SELECT count(*) FILTER (effective_date IS NULL), sum(weight) "
-            "FROM reference.municipality_mapping_2026").fetchone()
+            "SELECT count(*) FILTER (effective_date IS NULL), sum(weight) FROM reference.municipality_mapping_2026"
+        ).fetchone()
     assert nulls == (mapping["change_type"] == h.CHANGE_UNCHANGED).sum()
     assert total == pytest.approx(mapping["old_code"].nunique())
 
@@ -278,7 +324,7 @@ def test_committed_mapping_invariants():
     assert (m.groupby("old_code")["weight"].sum() - 1.0).abs().max() < 1e-9
     identity = set(m.loc[m["change_type"] == h.CHANGE_UNCHANGED, "old_code"])
     assert set(m["new_code_2026"]) == identity  # every target is a 2026 code with its own identity row
-    assert len(identity) == 342                 # 86247NED: 342 municipalities on 1 January 2026
+    assert len(identity) == 342  # 86247NED: 342 municipalities on 1 January 2026
     assert m[["old_code", "new_code_2026"]].apply(tuple, axis=1).is_monotonic_increasing
     assert set(m["change_type"]) <= {h.CHANGE_UNCHANGED, h.CHANGE_RENAME, h.CHANGE_MERGE, h.CHANGE_SPLIT}
 
@@ -286,9 +332,11 @@ def test_committed_mapping_invariants():
 def test_boundary_corrections_since_2011(regions):
     bc = h.boundary_corrections(regions, since=date(2011, 1, 1))
     weesp = bc[bc["from_code"] == "GM0457"]
-    # "Grenswijziging per 01-01-2016, overgegaan naar: - Gooise Meren (GM1942), ... 4 hectare met 0 woningen en 0 inwoners"
+    # "Grenswijziging per 01-01-2016, overgegaan naar: - Gooise Meren (GM1942), ...
+    #  4 hectare met 0 woningen en 0 inwoners"
     assert weesp[["to_code", "effective_date", "hectares", "inhabitants"]].values.tolist() == [
-        ["GM1942", date(2016, 1, 1), 4.0, 0]]
+        ["GM1942", date(2016, 1, 1), 4.0, 0]
+    ]
     assert (bc["effective_date"] >= date(2011, 1, 1)).all()  # Weesp's 2009 correction is excluded
 
 
