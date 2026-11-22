@@ -168,6 +168,11 @@ def _parse_abolition(lines: list[str], start: int) -> tuple[date, list[Receiver]
     """Parse the receivers that follow the ``Opgeheven per ...`` header at ``lines[start]``."""
     header = _ABOLITION_HEADER_RE.match(lines[start])
     assert header is not None
+    return _parse_date(header.group("date")), _parse_receivers(lines, start)
+
+
+def _parse_receivers(lines: list[str], start: int) -> list[Receiver]:
+    """Parse the ``- <name> (GMxxxx),`` / ``... <numbers>`` pairs after the header at ``lines[start]``."""
     receivers: list[dict] = []
     for line in lines[start + 1:]:
         # A block ends at a blank line, a lone "." (used as separator in 5 records,
@@ -180,8 +185,36 @@ def _parse_abolition(lines: list[str], start: int) -> tuple[date, list[Receiver]
             ha, dw, inh = parse_detail_line(m.group("text"))
             receivers[-1].update(hectares=ha, dwellings=dw, inhabitants=inh)
         else:
-            logger.warning("Unrecognised line in abolition block: %r", line)
-    return _parse_date(header.group("date")), [Receiver(**r) for r in receivers]
+            logger.warning("Unrecognised line in event block: %r", line)
+    return [Receiver(**r) for r in receivers]
+
+
+_BOUNDARY_OUT_RE = re.compile(rf"^(?:Grenswijziging|Wijziging) per {_DATE}, overgegaan naar:$")
+
+
+def boundary_corrections(regions: pd.DataFrame, since: date) -> pd.DataFrame:
+    """Boundary corrections (``Grenswijziging``) between municipalities that keep their code.
+
+    These are NOT modelled in the mapping (a code maps to its successor as a
+    whole). This function only quantifies the limitation: one row per transfer
+    on or after ``since``, read from the sending municipality's description.
+    """
+    rows = []
+    for key, title, desc in regions[["Key", "Title", "Description"]].itertuples(index=False):
+        code = str(key).strip()
+        if not code.startswith("GM") or pd.isna(desc):
+            continue
+        lines = _normalise_lines(str(desc))
+        for i, line in enumerate(lines):
+            m = _BOUNDARY_OUT_RE.match(line)
+            if not m or (eff := _parse_date(m.group("date"))) < since:
+                continue
+            for r in _parse_receivers(lines, i):
+                rows.append({"from_code": code, "from_name": str(title).strip(), "to_code": r.code,
+                             "to_name": r.name, "effective_date": eff, "hectares": r.hectares,
+                             "dwellings": r.dwellings, "inhabitants": r.inhabitants})
+    cols = ["from_code", "from_name", "to_code", "to_name", "effective_date", "hectares", "dwellings", "inhabitants"]
+    return pd.DataFrame(rows, columns=cols).sort_values(["effective_date", "from_code", "to_code"], ignore_index=True)
 
 
 def parse_description(code: str, name: str, description: str | None) -> list[SuccessionEvent]:
@@ -531,6 +564,16 @@ def run(start_year: int = DEFAULT_START_YEAR, end_year: int = DEFAULT_END_YEAR,
     validate_mapping(mapping, codes, set(targets))
     write_mapping(mapping, output or mapping_path(root))
     summary = summarise(mapping, events, since=date(start_year, 1, 1))
+    corrections = boundary_corrections(regions, since=date(start_year, 1, 1))
+    largest = corrections.nlargest(3, "inhabitants")
+    summary["boundary_corrections_since"] = {
+        "transfers": int(len(corrections)),
+        "inhabitants_total": int(corrections["inhabitants"].fillna(0).sum()),
+        "dwellings_total": int(corrections["dwellings"].fillna(0).sum()),
+        "transfers_with_100_plus_inhabitants": int((corrections["inhabitants"] >= 100).sum()),
+        "largest": [f"{r.from_code}->{r.to_code} {r.effective_date} {r.inhabitants} inh."
+                    for r in largest.itertuples(index=False)],
+    }
     for key, value in summary.items():
         logger.info("%s: %s", key, value)
     return mapping, summary

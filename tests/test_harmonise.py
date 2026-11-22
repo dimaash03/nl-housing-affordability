@@ -281,3 +281,12 @@ def test_committed_mapping_invariants():
     assert len(identity) == 342                 # 86247NED: 342 municipalities on 1 January 2026
     assert m[["old_code", "new_code_2026"]].apply(tuple, axis=1).is_monotonic_increasing
     assert set(m["change_type"]) <= {h.CHANGE_UNCHANGED, h.CHANGE_RENAME, h.CHANGE_MERGE, h.CHANGE_SPLIT}
+
+
+def test_boundary_corrections_since_2011(regions):
+    bc = h.boundary_corrections(regions, since=date(2011, 1, 1))
+    weesp = bc[bc["from_code"] == "GM0457"]
+    # "Grenswijziging per 01-01-2016, overgegaan naar: - Gooise Meren (GM1942), ... 4 hectare met 0 woningen en 0 inwoners"
+    assert weesp[["to_code", "effective_date", "hectares", "inhabitants"]].values.tolist() == [
+        ["GM1942", date(2016, 1, 1), 4.0, 0]]
+    assert (bc["effective_date"] >= date(2011, 1, 1)).all()  # Weesp's 2009 correction is excluded
