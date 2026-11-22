@@ -362,3 +362,24 @@ def test_active_codes_exclude_buitenland():
     ends = {"GM0363": None, "GM0998": None, "GM0457": date(2022, 3, 24), "GM0999": date(1996, 1, 1)}
     assert h.active_codes(ends) == {"GM0363"}
     assert h.check_end_dates({}, {"GM0999": date(1996, 1, 1)}) == []
+
+
+def test_cli_load_only_loads_the_committed_csv_without_raw_data(tmp_path, monkeypatch):
+    """QA H-3: `make load` loads the committed mapping; it must not need (or rebuild from) data/raw/."""
+    loaded: list[Path | None] = []
+    monkeypatch.setattr(h, "run", lambda *a, **k: pytest.fail("--load-only must not rebuild the CSV"))
+    monkeypatch.setattr(h, "load_mapping_to_duckdb", lambda csv_path=None, **_: loaded.append(csv_path) or 456)
+    assert h.main(["--load-only"]) == 0
+    assert loaded == [None]  # None = the committed data/reference CSV
+
+
+def test_cli_load_only_and_load_duckdb_are_exclusive():
+    with pytest.raises(SystemExit):
+        h.main(["--load-only", "--load-duckdb"])
+
+
+def test_load_only_reads_the_committed_file(tmp_path):
+    db = tmp_path / "t.duckdb"
+    n = h.load_mapping_to_duckdb(db_path=db)
+    committed = pd.read_csv(h.mapping_path())
+    assert n == len(committed)

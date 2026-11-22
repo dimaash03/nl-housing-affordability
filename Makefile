@@ -28,8 +28,13 @@ lock:  ## Regenerate requirements.lock from the current .venv (commit it with th
 ingest:  ## Download all CBS tables from config/cbs_tables.yaml into data/raw/ (FORCE=1 to re-download)
 	$(BIN)/python -m nl_housing.ingest $(if $(FORCE),--force,)
 
-load:  ## Load data/raw/ into data/nl_housing.duckdb (schema raw)
+load:  ## Load data/raw/ (schema raw) and the committed herindeling mapping (schema reference) into DuckDB
 	$(BIN)/python -m nl_housing.load_duckdb
+	$(BIN)/python -m nl_housing.harmonise --load-only
+
+.PHONY: harmonise
+harmonise:  ## Rebuild data/reference/municipality_mapping_2026.csv from data/raw/ and load it (commit the CSV diff)
+	$(BIN)/python -m nl_housing.harmonise --load-duckdb
 
 transform:  ## Build the SQL models (sql/models.yaml order) into schemas staging / marts
 	$(BIN)/python -m nl_housing.transform

@@ -655,21 +655,28 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--start-year", type=int, default=DEFAULT_START_YEAR)
     parser.add_argument("--end-year", type=int, default=DEFAULT_END_YEAR)
     parser.add_argument("--output", type=Path, help=f"CSV path (default data/reference/{MAPPING_FILE_NAME})")
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--load-duckdb",
         action="store_true",
-        help=f"also load the CSV into {DUCKDB_SCHEMA}.{DUCKDB_TABLE} in data/nl_housing.duckdb",
+        help=f"rebuild the CSV from data/raw/, then load it into {DUCKDB_SCHEMA}.{DUCKDB_TABLE}",
+    )
+    mode.add_argument(
+        "--load-only",
+        action="store_true",
+        help=f"do not rebuild: load the committed CSV into {DUCKDB_SCHEMA}.{DUCKDB_TABLE} (used by `make load`)",
     )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     try:
-        run(args.start_year, args.end_year, output=args.output)
+        if not args.load_only:
+            run(args.start_year, args.end_year, output=args.output)
+        if args.load_duckdb or args.load_only:
+            load_mapping_to_duckdb(csv_path=args.output)
     except (HarmonisationError, FileNotFoundError) as exc:
         logger.error("%s", exc)
         return 1
-    if args.load_duckdb:
-        load_mapping_to_duckdb(csv_path=args.output)
     return 0
 
 
