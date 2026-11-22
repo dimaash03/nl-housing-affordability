@@ -146,9 +146,6 @@ def run(root: Path = config.REPO_ROOT, db_path: Path | None = None) -> dict[str,
 
     counts: dict[str, int] = {}
     with duckdb.connect(str(db_path)) as con:
-        # Relative file paths in models (e.g. read_csv('data/reference/...csv')) resolve against the
-        # repo root, not the current working directory, so `make transform` works from any folder.
-        con.execute("SET file_search_path = ?", [str(root)])
         con.execute("BEGIN TRANSACTION")
         try:
             for layer in plan:  # also for empty layers, so downstream tools can rely on the schema
