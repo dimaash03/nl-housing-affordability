@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV   := .venv
 BIN    := $(VENV)/bin
 
-.PHONY: setup ingest load transform check test lint format clean-data help
+.PHONY: setup setup-locked lock ingest load transform check test lint format clean-data help
 
 help:  ## Show available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -12,6 +12,18 @@ setup:  ## Create .venv and install dependencies + the nl_housing package (edita
 	$(BIN)/pip install --upgrade pip
 	$(BIN)/pip install -r requirements.txt
 	$(BIN)/pip install -e .
+
+setup-locked:  ## Like setup, but with the exact versions from requirements.lock (Python >= 3.12)
+	$(PYTHON) -m venv $(VENV)
+	$(BIN)/pip install --upgrade pip
+	$(BIN)/pip install -r requirements.lock
+	$(BIN)/pip install -e .
+
+lock:  ## Regenerate requirements.lock from the current .venv (commit it with the change that needed it)
+	@{ echo "# Exact versions of the environment the pipeline was last run and tested with (review finding C4)."; \
+	   echo "# Generated with \`make lock\` (pip freeze --exclude-editable) on Python $$($(BIN)/python -c 'import platform; print(platform.python_version() + ", " + platform.system())'), $$(date +%F)."; \
+	   echo "# Install: pip install -r requirements.lock && pip install -e ."; \
+	   $(BIN)/pip freeze --exclude-editable; } > requirements.lock
 
 ingest:  ## Download all CBS tables from config/cbs_tables.yaml into data/raw/ (FORCE=1 to re-download)
 	$(BIN)/python -m nl_housing.ingest $(if $(FORCE),--force,)
