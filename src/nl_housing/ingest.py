@@ -274,8 +274,12 @@ def select_tables(tables: list[TableConfig], table_id: str | None) -> list[Table
     return [TableConfig(id=table_id)]
 
 
-def run(table_id: str | None = None, force: bool = False, root: Path = config.REPO_ROOT,
-        session: requests.Session | None = None) -> dict[str, list[str]]:
+def run(
+    table_id: str | None = None,
+    force: bool = False,
+    root: Path = config.REPO_ROOT,
+    session: requests.Session | None = None,
+) -> dict[str, list[str]]:
     """Download the selected tables. Returns ids grouped by outcome."""
     tables = select_tables(config.load_tables_config(root=root), table_id)
     result: dict[str, list[str]] = {"downloaded": [], "skipped": [], "failed": []}

@@ -44,23 +44,38 @@ def make_routes(table_id: str = TABLE_ID) -> dict[str, dict[str, Any]]:
     feed = f"https://opendata.cbs.nl/ODataFeed/odata/{table_id}"
     page2 = f"{feed}/TypedDataSet?$format=json&$skip=2"
     return {
-        f"{api}/TableInfos": {"value": [{"ID": 0, "Title": "Fake table", "Period": "2015-2024",
-                                          "Modified": "2026-01-01T00:00:00"}]},
-        f"{api}/DataProperties": {"value": [
-            {"odata.type": "Cbs.OData.GeoDimension", "ID": 0, "Type": "GeoDimension", "Key": "RegioS",
-             "Decimals": None},
-            {"odata.type": "Cbs.OData.TimeDimension", "ID": 1, "Type": "TimeDimension", "Key": "Perioden",
-             "Decimals": None},
-            {"odata.type": "Cbs.OData.Topic", "ID": 2, "Type": "Topic", "Key": "Price_1", "Decimals": 0},
-        ]},
+        f"{api}/TableInfos": {
+            "value": [{"ID": 0, "Title": "Fake table", "Period": "2015-2024", "Modified": "2026-01-01T00:00:00"}]
+        },
+        f"{api}/DataProperties": {
+            "value": [
+                {
+                    "odata.type": "Cbs.OData.GeoDimension",
+                    "ID": 0,
+                    "Type": "GeoDimension",
+                    "Key": "RegioS",
+                    "Decimals": None,
+                },
+                {
+                    "odata.type": "Cbs.OData.TimeDimension",
+                    "ID": 1,
+                    "Type": "TimeDimension",
+                    "Key": "Perioden",
+                    "Decimals": None,
+                },
+                {"odata.type": "Cbs.OData.Topic", "ID": 2, "Type": "Topic", "Key": "Price_1", "Decimals": 0},
+            ]
+        },
         f"{api}/CategoryGroups": {"value": []},
-        f"{api}/RegioS": {"value": [{"Key": "GM0363", "Title": "Amsterdam"},
-                                    {"Key": "GM0344", "Title": "Utrecht"}]},
+        f"{api}/RegioS": {"value": [{"Key": "GM0363", "Title": "Amsterdam"}, {"Key": "GM0344", "Title": "Utrecht"}]},
         f"{api}/Perioden": {"value": [{"Key": "2024JJ00", "Title": "2024"}]},
-        f"{feed}/TypedDataSet": {"value": [
-            {"ID": 0, "RegioS": "GM0363", "Perioden": "2024JJ00", "Price_1": 1.0},
-            {"ID": 1, "RegioS": "GM0344", "Perioden": "2024JJ00", "Price_1": 2.0},
-        ], "odata.nextLink": page2},
+        f"{feed}/TypedDataSet": {
+            "value": [
+                {"ID": 0, "RegioS": "GM0363", "Perioden": "2024JJ00", "Price_1": 1.0},
+                {"ID": 1, "RegioS": "GM0344", "Perioden": "2024JJ00", "Price_1": 2.0},
+            ],
+            "odata.nextLink": page2,
+        },
         page2: {"value": [{"ID": 2, "RegioS": "NL01", "Perioden": "2024JJ00", "Price_1": None}]},
     }
 

@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV   := .venv
 BIN    := $(VENV)/bin
 
-.PHONY: setup ingest load transform test clean-data help
+.PHONY: setup ingest load transform test lint format clean-data help
 
 help:  ## Show available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -24,6 +24,14 @@ transform:  ## Build the SQL models (sql/models.yaml order) into schemas staging
 
 test:  ## Run the offline unit tests
 	$(BIN)/python -m pytest
+
+lint:  ## Lint and check formatting with ruff (config in pyproject.toml)
+	$(BIN)/ruff check .
+	$(BIN)/ruff format --check .
+
+format:  ## Auto-fix lint findings and format the code with ruff
+	$(BIN)/ruff check --fix .
+	$(BIN)/ruff format .
 
 clean-data:  ## Delete downloaded data and the DuckDB file (keeps .gitkeep)
 	find data/raw data/processed -mindepth 1 -maxdepth 1 ! -name .gitkeep -exec rm -rf {} +
