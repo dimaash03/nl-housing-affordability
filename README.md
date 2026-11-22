@@ -1,6 +1,6 @@
 # NL Housing Affordability
 
-> **Status: Work in progress** — stage 1 (scoping / data sourcing). See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
+> **Status: Work in progress** — stage 2 (ingestion & staging). See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
 How affordable is buying a home in the Netherlands, and how has that changed over the last decade?
 This project relates average house prices to household income for every Dutch municipality (*gemeente*)
@@ -11,13 +11,14 @@ Power BI dashboard built on a star schema.
 
 ## Business questions
 
-1. How has the **price-to-income ratio** (average house price ÷ household income) developed per municipality over the last 10+ years?
-2. Is the affordability gap between the **Randstad (G4)** and the **rest of the Netherlands** widening or narrowing?
-3. Which municipalities saw the **largest deterioration or improvement** in affordability?
-4. Are there clear **regional (provincial) patterns** beyond the Randstad?
-5. How sensitive are the conclusions to the **income definition** used (e.g. mean vs. median, disposable vs. standardised income)?
+1. How has the **price-to-income ratio** (average sale price ÷ median disposable household income) developed per municipality and province from 2011 to 2025?
+2. Which municipalities are the **least and most affordable**, and how has their ranking changed?
+3. Where did **prices grow faster than incomes**, and has the gap between the **G4** (Amsterdam, Rotterdam, Den Haag, Utrecht) and the **rest of the Netherlands** widened or narrowed?
+4. What does buying the average home mean for a median household: **years of saving for the upfront costs**, and the **monthly payment** under different mortgage rates?
 
-Exact metric definitions are still to be approved and will be recorded in `docs/DECISIONS_LOG.md`.
+Robustness checks: owner-occupier income instead of all households, a quality-adjusted price index for the G4 and provinces,
+and 2024 (final) instead of 2025 (preliminary). Metric definitions: [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md);
+the reasoning behind each choice: [docs/DECISIONS_LOG.md](docs/DECISIONS_LOG.md).
 
 ## Data sources
 
