@@ -12,13 +12,17 @@ Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star
 - 2026-11-22 review of PR #1 and the scaffold: key values re-checked against the API, all open questions decided
   (D-003 … D-017), findings listed in `docs/reviews/2026-11-22_research_review.md`.
 
-## In progress (stage 2, parallel branches)
-1. `feat/pipeline-staging` — retries for CBS requests (C1), SQL runner `nl_housing.transform` (C2), staging models for
-   all 7 tables, data tests (C3), lock file + ruff (C4, C5); real `make ingest && make load && make transform` with row counts.
-2. `feat/harmonisation` — tested parser of `70739ned/RegioS` descriptions → `data/reference/municipality_mapping_2026.csv`,
-   weight sensitivity (D-007).
-3. `feat/geo-boundaries` — `nl_housing.geo` script for PDOK boundaries + licence check (D-014). The download itself is
-   run by the owner locally (PDOK not reachable from the agent environment).
+## Stage 2 — merged / in review
+- Merged: #2 pipeline & staging, #3 geo boundaries.
+- Stage-2 QA review (`docs/reviews/2026-11-22_stage2_qa_review.md`, PR #6). Every finding is fixed except P-6:
+  - #5: ingest retries pages whose response body breaks off (P-1, major).
+  - #7: geo G-1…G-6 (lint, string `jaarcode`, holes matched one by one, files checked after rounding, `make geo`,
+    `Content-Crs` per page), pipeline P-2…P-5 (whole-percent owner share from 2021, stale tables dropped,
+    period-status test), D-011 reworded, decision IDs D-018…D-025 (proposed).
+  - #4 harmonisation: H-1…H-7 fixed on the branch (committed mapping loaded by `make load`, `make harmonise`,
+    `assert_mapping_covers_staging.sql`, doc SQL equals the Python reference for 5 130/5 130 municipality-years).
+- Integration (scratch merge #4 + #5 + #7, 2026-11-22 download): 151 tests, lint clean, `make check` 15/15.
+- Merge order: #5 → #7 → #4 → #6.
 
 ## Next steps (after stage 2 is merged)
 1. Stage 3: `int_*` harmonised models, `fct_affordability`, `dim_municipality`, `dim_province`, `dim_year`,
@@ -26,6 +30,9 @@ Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star
 2. Parquet export for Power BI (`make export`).
 
 ## Open items
+- Owner: approve D-018…D-025 (logged as proposed).
+- Owner: `make setup-geo && make geo` on the Mac (PDOK), then commit `data/reference/municipalities_2026.*`.
+- Owner: `make lock` on the Mac (P-6: the lock was generated on Linux / Python 3.13).
 - PDOK licence (D-014) — confirm before committing the boundary file.
 - Historical mortgage-rate series (D-013, stretch) — owner downloads from DNB manually.
 - Power BI refresh: Parquet export (planned) vs DuckDB ODBC driver.
