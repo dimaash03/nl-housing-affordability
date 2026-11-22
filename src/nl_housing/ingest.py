@@ -15,6 +15,11 @@ dimension codes (e.g. ``GM0363``) with their labels (``Amsterdam``). For a
 reproducible pipeline we keep the stable codes in the fact data and the labels in
 separate dimension tables, which map 1:1 to the Power BI star schema.
 
+Robustness: all requests go through :func:`build_session`, a ``requests.Session``
+whose adapter retries transient failures (HTTP 429/500/502/503/504 and connection
+errors) with exponential backoff and honours the ``Retry-After`` header. A single
+hiccup of the CBS API therefore no longer fails a whole table.
+
 Idempotency: a table is skipped when its ``metadata.json`` already exists,
 unless ``--force`` is given. Downloads are written to a temporary folder and
 moved into place only when complete, so an interrupted run never leaves a
@@ -40,6 +45,8 @@ from typing import Any
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 from nl_housing import config
 from nl_housing.config import TableConfig
@@ -62,6 +69,12 @@ DIMENSION_TYPES = {"Dimension", "TimeDimension", "GeoDimension", "GeoDetail"}
 
 REQUEST_TIMEOUT_S = 60
 
+#: HTTP statuses worth retrying: rate limiting (429) and transient server/gateway errors.
+RETRY_STATUSES: tuple[int, ...] = (429, 500, 502, 503, 504)
+#: Max retries per request; with backoff 1 s the waits are 0, 2, 4, 8, 16 s (urllib3 skips the first).
+RETRY_TOTAL = 5
+RETRY_BACKOFF_FACTOR = 1.0
+
 
 # --- URLs --------------------------------------------------------------------
 
@@ -83,6 +96,35 @@ def statline_url(table_id: str) -> str:
 
 
 # --- HTTP --------------------------------------------------------------------
+
+
+def build_session(
+    total: int = RETRY_TOTAL,
+    backoff_factor: float = RETRY_BACKOFF_FACTOR,
+) -> requests.Session:
+    """Return a ``requests.Session`` that retries transient CBS API failures.
+
+    - retries connection/read errors and the statuses in :data:`RETRY_STATUSES`;
+    - waits ``backoff_factor * 2 ** (retry - 1)`` seconds between attempts (exponential backoff);
+    - if the server sends ``Retry-After`` (typical for 429/503), that wait is used instead;
+    - only idempotent methods are retried (the pipeline only issues GETs).
+
+    When all retries are used up the last response is returned (``raise_on_status=False``),
+    so :func:`fetch_all` still raises an ``HTTPError`` that names the status code.
+    """
+    retry = Retry(
+        total=total,
+        backoff_factor=backoff_factor,
+        status_forcelist=RETRY_STATUSES,
+        allowed_methods=frozenset({"GET", "HEAD"}),
+        respect_retry_after_header=True,
+        raise_on_status=False,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session = requests.Session()
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
 
 
 def fetch_all(url: str, session: requests.Session) -> list[dict[str, Any]]:
@@ -150,7 +192,7 @@ def download_table(
         logger.info("[%s] already downloaded, skipping (use --force to refresh)", table.id)
         return None
 
-    session = session or requests.Session()
+    session = session or build_session()
     tmp_dir = out_dir.with_name(f".{table.id}.tmp")
     if tmp_dir.exists():
         shutil.rmtree(tmp_dir)
@@ -237,7 +279,7 @@ def run(table_id: str | None = None, force: bool = False, root: Path = config.RE
     """Download the selected tables. Returns ids grouped by outcome."""
     tables = select_tables(config.load_tables_config(root=root), table_id)
     result: dict[str, list[str]] = {"downloaded": [], "skipped": [], "failed": []}
-    session = session or requests.Session()
+    session = session or build_session()
     for table in tables:
         try:
             out = download_table(table, root=root, force=force, session=session)
