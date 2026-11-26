@@ -10,8 +10,8 @@ What will live here:
 The pipeline runs on macOS; Power BI Desktop runs in a Windows VM. To avoid installing a database
 server or ODBC driver on the Windows side:
 
-1. The `marts` tables in DuckDB are exported to Parquet in `data/processed/marts/`
-   (export step to be added to the pipeline; `COPY marts.<table> TO '...parquet' (FORMAT parquet)`).
+1. `make export` writes every `marts` table to `data/processed/marts/<table>.parquet`
+   (`nl_housing.export`; stale files are removed, so the folder mirrors the database).
 2. The repo folder is shared with the VM (e.g. a Parallels/UTM shared folder).
 3. Power BI imports each Parquet file with Power Query (`Parquet.Document(File.Contents(...))`),
    using a single **parameter** for the base folder so the path is not hardcoded in every query.

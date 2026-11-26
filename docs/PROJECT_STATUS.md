@@ -1,7 +1,7 @@
 # Project status
 
 **Last updated:** 2026-11-26
-**Current stage:** 3. Marts (star schema)
+**Current stage:** 3. Marts (star schema) — complete pending PR review; next 5. Power BI
 
 Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star schema) → 4. Analysis (notebooks) → 5. Power BI dashboard → 6. Write-up (README insights, limitations).
 
@@ -14,12 +14,16 @@ Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star
 - 2026-11-26: `cpi_2025_index` and `real_median_disposable_income_eur_2025` added to the fact (D-027);
   `is_harmonised` definition fixed at 311 rows (D-026) — PR #9, merged.
 - 2026-11-26: `dim_municipality` (342), `dim_province` (12), `dim_year` (15); data tests for star-schema integrity
-  and the D-016 2 % income validation (+0.47 … +0.99 % in 2011–2025). D-028 proposed.
+  and the D-016 2 % income validation (+0.47 … +0.99 % in 2011–2025). PR #10 merged, D-028 approved.
+- 2026-11-26: `fct_group_affordability` (270 rows: NL, provinces, G4 / Rest of NL, three-way split) with
+  `assert_group_aggregates.sql`; `make export` (marts → `data/processed/marts/*.parquet`). D-029 proposed.
+  G4 PTI 2011 9.41 → 2024 12.12; Rest of NL 7.16 → 8.72 (2025 preliminary: 12.01 / 8.97).
 
 ## Next steps (towards the dashboard)
-1. Group aggregates (D-016): G4 / Rest of NL (+ secondary split) price, income and PTI per year.
-2. `make export`: marts → Parquet in `data/processed/marts/` for Power BI.
-3. Stage 4 (short EDA notebook) in parallel with stage 5 (Power BI), so the dashboard carries findings.
+1. Stage 5 Power BI: import the Parquet files, star schema, DAX measures, 4 pages (KPI overview, map,
+   G4 vs regions, municipality detail).
+2. Stage 4 short EDA notebook in parallel, so the dashboard and README carry findings.
+3. Public one-page case-study site (GitHub Pages) at the end.
 
 ## Open items
 - Owner: `make setup-geo && make geo` on the Mac (PDOK), then commit `data/reference/municipalities_2026.*`.
