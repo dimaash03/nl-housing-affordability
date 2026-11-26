@@ -31,6 +31,12 @@ Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star
   numbering of the proposed decisions (H-2), loading the committed mapping in the standard pipeline (H-3) and a
   mapping ↔ staging data test (H-5).
 
+## Stage 3 started (2026-11-22)
+- `feat/fct-affordability` (PR #8) — `marts.fct_affordability` (342 x 15 = 5 130 rows), stacked on the unmerged
+  `feat/harmonisation` (PR #4) for `reference.municipality_mapping_2026`. Checks in the PR: grain, PTI nulls
+  (3 in 2025), Amsterdam PTI and harmonised price, prices identical to `weight_sensitivity`, D-016 income
+  validation (max +0.99 %).
+
 ## Next steps (after stage 2 is merged)
 1. Stage 3: `int_*` harmonised models, `fct_affordability`, `dim_municipality`, `dim_province`, `dim_year`,
    group aggregates (D-016) with the validation test (< 2 % vs official NL median). Owner drafts `fct_affordability` first.

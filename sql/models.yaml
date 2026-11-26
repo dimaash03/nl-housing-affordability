@@ -17,4 +17,6 @@ staging:
   - stg_cbs__house_price_index
   - stg_cbs__regions_history
 
-marts: []
+marts:
+  # Marts read from staging and reference (the committed herindeling mapping).
+  - fct_affordability
