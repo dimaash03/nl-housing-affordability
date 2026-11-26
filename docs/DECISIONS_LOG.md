@@ -118,37 +118,37 @@ different decisions (stage-2 QA H-2); #2 keeps D-018…D-021 and the proposals o
 - **Decision:** The execution order of the SQL models is an explicit list in `sql/models.yaml`. `make transform` builds all models in one transaction and drops tables in the managed schemas (`staging`, `marts`) that no model produces any more.
 - **Rationale:** Numeric file prefixes would break "file name = table name"; a dependency parser is too much machinery for ~10 models. One reviewable list; the runner fails if the list and the folders disagree. One transaction makes a run all-or-nothing; dropping unmanaged tables stops Power BI from reading a stale table of a removed or renamed model.
 - **Alternatives:** numeric prefixes (`01_stg_...`); dbt-style dependency inference.
-- **Status:** proposed (PR #2; drop of unmanaged tables added in the stage-2 QA follow-up).
+- **Status:** approved (PR #2; drop of unmanaged tables added in the stage-2 QA follow-up).
 
 ## D-019 — Staging drops rows without measures
 - **Decision:** Staging drops rows with no measure values in tables that list every historical code for every year (`83625NED`, `70072ned`). Missing municipality-years are detected against the 2026 list downstream (data tests), not kept as NULL rows.
 - **Rationale:** CBS returns all 728 GM codes ever used for every year; an all-NULL row means "municipality did not exist that year". Coverage against the 2026 list is asserted separately.
 - **Alternatives:** keep the NULL rows and filter in every mart.
-- **Status:** proposed (PR #2).
+- **Status:** approved (PR #2).
 
 ## D-020 — Data tests as SQL files
 - **Decision:** Data tests are SQL files in `sql/tests/` that return the violating rows (`make check`). Known exceptions are listed explicitly inside the test, with a reference to the docs.
 - **Rationale:** Plain SQL any analyst can read; the output is already the start of the investigation (dbt "singular test" convention). They need the downloaded data, so they run in `make check`, not in the offline `make test`.
 - **Alternatives:** pytest against the DuckDB file; Great Expectations / dbt (too heavy for this project).
-- **Status:** proposed (PR #2).
+- **Status:** approved (PR #2).
 
 ## D-021 — `is_preliminary`
 - **Decision:** `is_preliminary` = period status `Voorlopig` or `Nader voorlopig`. Any other status fails `make check`. Tables without `is_preliminary` in staging (prices, key figures, price index, CPI) must have only `Definitief` years ≥ 2011 (`assert_period_status_final.sql`).
 - **Rationale:** A new CBS status, or a preliminary price year, must not silently count as final.
-- **Status:** proposed (PR #2; the check for the other tables added in the stage-2 QA follow-up, P-5).
+- **Status:** approved (PR #2; the check for the other tables added in the stage-2 QA follow-up, P-5).
 
 ## D-022 — Mid-year rename: De Fryske Marren 2015
 - **Decision:** In 2015 GM1921 and GM1940 both have a price for the same territory. They are combined as one equal-weight unit before weighting, because `70072ned` has 1-January figures for GM1921 only.
-- **Status:** proposed (PR #4, as "D-018" there).
+- **Status:** approved (PR #4, as "D-018" there).
 
 ## D-023 — Pseudo-municipalities
 - **Decision:** GM0998 Buitenland and GM0999 Niet-gemeentelijk ingedeeld are excluded explicitly (`PSEUDO_CODES`) in the herindeling parser and the weight sensitivity.
-- **Status:** proposed (PR #4, as "D-019" there).
+- **Status:** approved (PR #4, as "D-019" there).
 
 ## D-024 — Boundary corrections are not modelled
 - **Decision:** Boundary corrections between existing municipalities are not modelled. Since 2011: 69 transfers, 2 642 inhabitants; the largest relative one is Slochteren → Groningen 2017 (6.6 % of Slochteren), every other transfer is below 3.2 %. Documented as a limitation.
-- **Status:** proposed (PR #4, as "D-020" there).
+- **Status:** approved (PR #4, as "D-020" there).
 
 ## D-025 — Split weights
 - **Decision:** Splits use inhabitant shares at the date of the split, applied to all earlier years, with a uniform price within the split municipality.
-- **Status:** proposed (PR #4, as "D-021" there).
+- **Status:** approved (PR #4, as "D-021" there).
