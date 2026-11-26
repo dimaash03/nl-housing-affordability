@@ -53,3 +53,21 @@ def test_load_all_with_no_data(repo_root: Path):
     db = repo_root / "data" / "empty.duckdb"
     assert load_duckdb.load_all(root=repo_root, db_path=db) == []
     assert db.exists()
+
+
+def test_load_all_drops_tables_of_removed_downloads(repo_root: Path):
+    """QA P-4: raw.cbs_* tables of a table that is no longer in data/raw/ are dropped."""
+    ingest.download_table(TableConfig(id=TABLE_ID), root=repo_root, session=FakeSession(make_routes()))
+    db = repo_root / "data" / "test.duckdb"
+    load_duckdb.load_all(root=repo_root, db_path=db)
+    with duckdb.connect(str(db)) as con:
+        con.execute("CREATE TABLE raw.cbs_00000ned AS SELECT 1 AS x")  # e.g. a table removed from the config
+        con.execute("CREATE SCHEMA reference")
+        con.execute("CREATE TABLE reference.keep_me AS SELECT 1 AS x")
+
+    load_duckdb.load_all(root=repo_root, db_path=db)
+    with duckdb.connect(str(db), read_only=True) as con:
+        raw = {r[0] for r in con.execute("SELECT table_name FROM duckdb_tables() WHERE schema_name = 'raw'").fetchall()}
+        ref = con.execute("SELECT count(*) FROM reference.keep_me").fetchone()[0]
+    assert "cbs_00000ned" not in raw and f"cbs_{TABLE_ID.lower()}" in raw and "_ingest_log" in raw
+    assert ref == 1

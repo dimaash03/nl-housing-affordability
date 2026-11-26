@@ -29,8 +29,13 @@ def _edge_points(p: tuple[float, float], q: tuple[float, float], n: int, amplitu
 
 
 def grid_feature_collection(
-    nx: int = 18, ny: int = 19, cell_m: float = 5000.0, wiggles: int = 40, amplitude: float = 300.0,
-    origin: tuple[float, float] = (120_000.0, 420_000.0), year: int | None = 2026,
+    nx: int = 18,
+    ny: int = 19,
+    cell_m: float = 5000.0,
+    wiggles: int = 40,
+    amplitude: float = 300.0,
+    origin: tuple[float, float] = (120_000.0, 420_000.0),
+    year: int | None = 2026,
 ) -> dict[str, Any]:
     """``nx * ny`` adjacent "municipalities" in RD New metres (default 342) with shared wiggly borders."""
     corners = {(i, j): (origin[0] + i * cell_m, origin[1] + j * cell_m) for i in range(nx + 1) for j in range(ny + 1)}
@@ -46,29 +51,45 @@ def grid_feature_collection(
             shift = (code * 7) % len(ring)
             ring = ring[shift:] + ring[:shift]
             ring.append(ring[0])
-            props: dict[str, Any] = {"statcode": f"GM{code:04d}", "statnaam": f"Gemeente {code}",
-                                     "jrstatcode": f"2026GM{code:04d}", "rubriek": "gemeente",
-                                     "startdatum": "2026-01-01T00:00:00Z", "einddatum": None}
+            props: dict[str, Any] = {
+                "statcode": f"GM{code:04d}",
+                "statnaam": f"Gemeente {code}",
+                "jrstatcode": f"2026GM{code:04d}",
+                "rubriek": "gemeente",
+                "startdatum": "2026-01-01T00:00:00Z",
+                "einddatum": None,
+            }
             if year is not None:
                 props["jaarcode"] = year
-            features.append({"type": "Feature", "id": code, "properties": props,
-                             "geometry": {"type": "Polygon", "coordinates": [[list(p) for p in ring]]}})
+            features.append(
+                {
+                    "type": "Feature",
+                    "id": code,
+                    "properties": props,
+                    "geometry": {"type": "Polygon", "coordinates": [[list(p) for p in ring]]},
+                }
+            )
             code += 1
     return {"type": "FeatureCollection", "features": features}
 
 
-def pages(features: list[dict[str, Any]], page_size: int, base: str = ITEMS_URL,
-          number_matched: bool = True) -> dict[str, dict[str, Any]]:
+def pages(
+    features: list[dict[str, Any]], page_size: int, base: str = ITEMS_URL, number_matched: bool = True
+) -> dict[str, dict[str, Any]]:
     """Split features into OGC API pages keyed by URL; page 1 is the bare items URL."""
-    chunks = [features[i:i + page_size] for i in range(0, len(features), page_size)] or [[]]
+    chunks = [features[i : i + page_size] for i in range(0, len(features), page_size)] or [[]]
     urls = [base] + [f"{base}?f=json&jaarcode=2026&limit={page_size}&cursor=c{n}" for n in range(1, len(chunks))]
     routes = {}
-    for n, (url, chunk) in enumerate(zip(urls, chunks)):
+    for n, (url, chunk) in enumerate(zip(urls, chunks, strict=True)):
         links = [{"rel": "self", "href": url}]
         if n + 1 < len(urls):
             links.append({"rel": "next", "type": "application/geo+json", "href": urls[n + 1]})
-        page: dict[str, Any] = {"type": "FeatureCollection", "features": chunk, "links": links,
-                                "numberReturned": len(chunk)}
+        page: dict[str, Any] = {
+            "type": "FeatureCollection",
+            "features": chunk,
+            "links": links,
+            "numberReturned": len(chunk),
+        }
         if number_matched:
             page["numberMatched"] = len(features)
         routes[url] = page
@@ -76,8 +97,9 @@ def pages(features: list[dict[str, Any]], page_size: int, base: str = ITEMS_URL,
 
 
 class Response:
-    def __init__(self, payload: dict[str, Any] | None = None, status: int = 200,
-                 headers: dict[str, str] | None = None) -> None:
+    def __init__(
+        self, payload: dict[str, Any] | None = None, status: int = 200, headers: dict[str, str] | None = None
+    ) -> None:
         self._payload = payload or {}
         self.status_code = status
         self.headers = headers or {}

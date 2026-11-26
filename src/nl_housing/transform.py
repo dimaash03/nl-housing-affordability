@@ -39,7 +39,7 @@ from pathlib import Path
 import duckdb
 import yaml
 
-from nl_housing import config
+from nl_housing import config, load_duckdb
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +156,8 @@ def run(root: Path = config.REPO_ROOT, db_path: Path | None = None) -> dict[str,
                 con.execute(f"CREATE OR REPLACE TABLE {model.table} AS\n{select}\n")
                 counts[model.table] = con.execute(f"SELECT count(*) FROM {model.table}").fetchone()[0]
                 logger.info("Built %s (%d rows)", model.table, counts[model.table])
+            for layer, models in plan.items():  # QA P-3: no stale tables of removed/renamed models
+                load_duckdb.drop_unmanaged(con, layer, {m.name for m in models})
             con.execute("COMMIT")
         except Exception:
             con.execute("ROLLBACK")

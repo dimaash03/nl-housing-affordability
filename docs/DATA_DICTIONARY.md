@@ -78,10 +78,12 @@ Definitions (from the table metadata, translated):
 | `TotaalParticuliereHuishoudens_51` | Totaal particuliere huishoudens | Private households | count | 2010–2025 |
 | `GemiddeldeHuishoudensgrootte_58` | Gemiddelde huishoudensgrootte | Average household size | persons | 2010–2025 |
 | `Woningvoorraad_59` | Woningvoorraad | Dwelling stock | count | 2010–2025 |
-| `Koopwoningen_64` | Koopwoningen | Share of owner-occupied dwellings | % | 2010–2025 |
+| `Koopwoningen_64` | Koopwoningen | Share of owner-occupied dwellings | % (1 decimal to 2020, whole % from 2021)² | 2010–2025 |
 | `GemiddeldeWOZWaardeVanWoningen_63` | Gemiddelde WOZ-waarde van woningen | Mean WOZ (municipal tax) value of dwellings | 1 000 euro | 2010–2026 (5 gaps in 2018: GM0417, GM0743, GM0847, GM1702, GM1721)¹ |
 
 ¹ Corrected 2026-11-22 from the staging run (`staging.stg_cbs__regional_key_figures`): the five 2018 gaps are in the WOZ value, not in `Koopwoningen_64`, which is complete for all 380 municipalities of 2018. The harmonisation weight (D-007/D-011) is therefore unaffected; WOZ for these five is missing.
+
+² Checked 2026-11-22 (stage-2 QA, P-2): GM values with a decimal part per year are 318–376 in 2011–2020 and 0 in every year 2021–2025. From 2021 the share is published in whole percentages, so `owner_occupied_stock` (the D-007 weight) is coarser by up to ±0.5 pp of the dwelling stock. This affects only the harmonised municipality-years of 2021–2022 (6 and 2, incl. Amsterdam + Weesp); none need harmonisation from 2023.
 
 ### 2.4 `86141NED` — consumer price index
 

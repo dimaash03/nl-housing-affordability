@@ -72,8 +72,10 @@ nl-housing-affordability/
 ├── src/nl_housing/    # Python package: config, ingest, load_duckdb, transform, check
 ├── tests/             # offline unit tests (network is mocked)
 ├── Makefile
-├── requirements.txt  # dependency lower bounds
-└── requirements.lock # exact versions of the last tested environment
+├── requirements.txt      # dependency lower bounds
+├── requirements.lock     # exact versions of the last tested environment
+├── requirements-geo.txt  # optional geo extras (lower bounds)
+└── requirements-geo.lock # exact versions of the geo extras
 ```
 
 ## How to run
@@ -88,6 +90,10 @@ make transform   # build the SQL models into schemas `staging` / `marts` (order:
 make check       # run the SQL data tests in sql/tests/ against the database
 make test        # run unit tests (no network needed)
 make lint        # ruff lint + format check (`make format` fixes)
+
+# Optional: municipality boundaries for the map (PDOK, D-014)
+make setup-geo   # install shapely / pyproj / topojson (requirements-geo.lock)
+make geo         # download + simplify into data/reference/municipalities_2026.* (FORCE=1 to re-download)
 ```
 
 Without `make`:

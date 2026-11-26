@@ -30,4 +30,4 @@ select = ["E", "W", "F", "I", "B", "UP", "N", "SIM"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["nl_housing"]
-known-local-folder = ["conftest"]
+known-local-folder = ["conftest", "geo_fixtures"]

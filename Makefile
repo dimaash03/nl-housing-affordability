@@ -23,7 +23,13 @@ lock:  ## Regenerate requirements.lock from the current .venv (commit it with th
 	@{ echo "# Exact versions of the environment the pipeline was last run and tested with (review finding C4)."; \
 	   echo "# Generated with \`make lock\` (pip freeze --exclude-editable) on Python $$($(BIN)/python -c 'import platform; print(platform.python_version() + ", " + platform.system())'), $$(date +%F)."; \
 	   echo "# Install: pip install -r requirements.lock && pip install -e ."; \
-	   $(BIN)/pip freeze --exclude-editable; } > requirements.lock
+	   $(BIN)/pip freeze --exclude-editable | grep -viE '^(pyproj|shapely|topojson)=='; } > requirements.lock
+	@if $(BIN)/python -c "import shapely, pyproj, topojson" 2>/dev/null; then \
+	  { echo "# Exact versions of the geo extras the boundary build was last tested with (QA G-5)."; \
+	    echo "# Install on top of requirements.lock:  pip install -r requirements-geo.lock   (or: make setup-geo)"; \
+	    echo "# Generated with \`make lock\` on Python $$($(BIN)/python -c 'import platform; print(platform.python_version() + ", " + platform.system())'), $$(date +%F)."; \
+	    $(BIN)/pip freeze --exclude-editable | grep -iE '^(pyproj|shapely|topojson)=='; } > requirements-geo.lock; \
+	fi
 
 ingest:  ## Download all CBS tables from config/cbs_tables.yaml into data/raw/ (FORCE=1 to re-download)
 	$(BIN)/python -m nl_housing.ingest $(if $(FORCE),--force,)
@@ -56,3 +62,11 @@ format:  ## Auto-fix lint findings and format the code with ruff
 clean-data:  ## Delete downloaded data and the DuckDB file (keeps .gitkeep)
 	find data/raw data/processed -mindepth 1 -maxdepth 1 ! -name .gitkeep -exec rm -rf {} +
 	rm -f data/nl_housing.duckdb data/nl_housing.duckdb.wal
+
+.PHONY: setup-geo geo
+
+setup-geo:  ## Install the optional geo extras (exact versions from requirements-geo.lock) into .venv
+	$(BIN)/pip install -r requirements-geo.lock
+
+geo:  ## Download + simplify the 2026 municipality boundaries into data/reference/ (FORCE=1 to re-download)
+	$(BIN)/python -m nl_housing.geo $(if $(FORCE),--force,)
