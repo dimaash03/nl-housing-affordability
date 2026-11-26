@@ -20,6 +20,13 @@ Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star
 3. `feat/geo-boundaries` — `nl_housing.geo` script for PDOK boundaries + licence check (D-014). The download itself is
    run by the owner locally (PDOK not reachable from the agent environment).
 
+## Stage-2 QA review (2026-11-22)
+- Report: `docs/reviews/2026-11-22_stage2_qa_review.md`. #2 and #3 are merged; #4 is open and ready on correctness.
+- Fixed: P-1, ingest retry of broken response bodies (PR #5).
+- Open before stage 3: `make lint` is red on `main` (geo, G-1); #4 needs `make format` (H-1), a decision on the
+  numbering of the proposed decisions (H-2), loading the committed mapping in the standard pipeline (H-3) and a
+  mapping ↔ staging data test (H-5).
+
 ## Next steps (after stage 2 is merged)
 1. Stage 3: `int_*` harmonised models, `fct_affordability`, `dim_municipality`, `dim_province`, `dim_year`,
    group aggregates (D-016) with the validation test (< 2 % vs official NL median). Owner drafts `fct_affordability` first.
