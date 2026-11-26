@@ -152,3 +152,15 @@ different decisions (stage-2 QA H-2); #2 keeps D-018…D-021 and the proposals o
 ## D-025 — Split weights
 - **Decision:** Splits use inhabitant shares at the date of the split, applied to all earlier years, with a uniform price within the split municipality.
 - **Status:** approved (PR #4, as "D-021" there).
+
+## D-026 — Definition of `is_harmonised`
+- **Decision:** `is_harmonised` is TRUE when the municipality-year price was built from more than one CBS source row (historical code), including the 2015 GM1921/GM1940 rename pair. 311 of 5 130 rows; the weight sensitivity reports 310 because it counts territorial units.
+- **Rationale:** The flag tells the dashboard user that a value is derived, not read directly from CBS. GM1940 2015 is the mean of two CBS rows, so it is derived.
+- **Alternatives:** count territorial units (310 rows) — consistent with `weight_sensitivity`, but would label a combined value as raw.
+- **Status:** approved (owner, 2026-11-26).
+
+## D-027 — Real values in the fact, real growth downstream
+- **Decision:** `fct_affordability` holds `cpi_2025_index`, `real_avg_sale_price_eur_2025` and `real_median_disposable_income_eur_2025`. Real growth rates and a real growth gap are computed from these columns in the notebooks / DAX; the fact keeps nominal growth columns only.
+- **Rationale:** One deflation definition shared by Python and Power BI; the fact stays row-level. PTI needs no real variant because price and income share the deflator.
+- **Alternatives:** all real growth columns in the fact (wider table, duplicated logic); deflate only in DAX (two definitions).
+- **Status:** approved (owner, 2026-11-26).

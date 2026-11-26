@@ -168,6 +168,9 @@ metrics as (
         avg_sale_price_eur / median_disposable_income_eur        as price_to_income_ratio,
         avg_sale_price_eur / median_disposable_income_owner_eur  as price_to_income_owner_ratio,
         avg_sale_price_eur * 100 / cpi_2025_index                as real_avg_sale_price_eur_2025,
+        median_disposable_income_eur * 100 / cpi_2025_index      as real_median_disposable_income_eur_2025,
+        -- Real values in 2025 euro. PTI needs no real variant: price and income share the deflator.
+        -- Real growth rates are derived from these columns in the analysis layer / DAX (owner decision 2026-11-26).
         -- growth vs the same municipality's 2011 value (nominal; CPI cancels out of the gap's sign)
         (avg_sale_price_eur
             / max(case when year = 2011 then avg_sale_price_eur end)
@@ -211,7 +214,9 @@ select
     households_count,
     price_to_income_ratio,
     price_to_income_owner_ratio,
+    cpi_2025_index,
     real_avg_sale_price_eur_2025,
+    real_median_disposable_income_eur_2025,
     price_growth_since_2011_pct,
     income_growth_since_2011_pct,
     growth_gap_pp,

@@ -129,10 +129,10 @@ All amounts in euro after unit conversion. `y` = year, `m` = municipality (2026 
 | `median_disposable_income_owner_eur` | same, Kenmerk `1014800` | **Mandatory sensitivity**: income of current owner-occupiers. |
 | **`price_to_income_ratio`** (PTI) | `avg_sale_price_eur / median_disposable_income_eur` | **Primary affordability metric.** "Years of median household disposable income needed to buy the average home." Higher = less affordable. Level is inflated by the mean/median mix — compare changes and ranks (D-004). |
 | `price_to_income_owner_ratio` | `avg_sale_price_eur / median_disposable_income_owner_eur` | Less sensitive to the share of renters, singles and students. |
-| `cpi_2025` | `CPI_1` (yearly average, 2025 = 100) | |
-| `real_avg_sale_price_eur_2025` | `avg_sale_price_eur * 100 / cpi_2025` | In 2025 euro. |
-| `real_median_disposable_income_eur_2025` | `median_disposable_income_eur * 100 / cpi_2025` | In 2025 euro. |
-| `price_growth_since_2011_pct`, `income_growth_since_2011_pct` | `(x_y / x_2011 - 1) * 100`, nominal and real variants | Base year 2011 = first year with income (D-008). |
+| `cpi_2025_index` | `CPI_1` (yearly average, 2025 = 100) | Kept in the fact so any amount can be deflated in DAX. |
+| `real_avg_sale_price_eur_2025` | `avg_sale_price_eur * 100 / cpi_2025_index` | In 2025 euro. |
+| `real_median_disposable_income_eur_2025` | `median_disposable_income_eur * 100 / cpi_2025_index` | In 2025 euro. |
+| `price_growth_since_2011_pct`, `income_growth_since_2011_pct` | `(x_y / x_2011 - 1) * 100`, nominal in the fact | Base year 2011 = first year with income (D-008). Real variants are computed from the `real_*` columns in the analysis layer / DAX (D-027). |
 | `growth_gap_pp` | `price_growth_since_2011_pct - income_growth_since_2011_pct` | Where prices outpaced incomes (Q3). |
 | `pti_rank_desc` | rank of `price_to_income_ratio` within year, 1 = least affordable, among rows without `low_reliability` / `income_missing` | Ranking shifts (Q2); flagged rows get `null` (D-009). |
 | `region_group` | `G4` if `m` in {GM0363, GM0599, GM0518, GM0344}; otherwise `Rest of NL` | Primary split (D-010). |
@@ -166,7 +166,7 @@ Parameters live in one config file (planned: `config/scenarios.yaml`) and are pr
 | Flag | Rule |
 |---|---|
 | `is_preliminary` | CBS `Perioden.Status = 'Voorlopig'` in `86380NED` (currently 2025). Never hard-code the year. |
-| `is_harmonised` | Municipality value built from more than one historical code in that year. |
+| `is_harmonised` | The price was built from more than one source row (historical code) in that year, including the 2015 GM1921/GM1940 rename pair (D-026). 311 of 5 130 rows. |
 | `low_reliability` | Fewer than 5 000 households (`ParticuliereHuishoudens_1 < 5`); 19 municipalities in 2024. |
 | `income_missing` | Income suppressed (`null`); in 2025: GM0088 Schiermonnikoog, GM0096 Vlieland, GM0277 Rozendaal. |
 

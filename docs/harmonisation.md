@@ -222,6 +222,11 @@ source code. Elsewhere all weights give the same price.
 
 Harmonised municipality-years (more than one source code): 310 of 5130 (44 municipalities).
 
+Note: `fct_affordability.is_harmonised` is TRUE for 311 rows. The extra row is De Fryske Marren (GM1940) 2015:
+the weight sensitivity counts territorial units (the GM1921/GM1940 rename pair is one unit, D-022), while the flag
+counts source rows (two CBS price rows were combined). The flag answers "is this value derived rather than read
+directly from CBS?", so the pair counts as harmonised (D-026).
+
 | Alternative weight vs owner stock | max abs diff | median abs diff | p95 abs diff | share within 0.5 % | max at |
 |---|---:|---:|---:|---:|---|
 | dwellings | 3.57 % | 0.23 % | 1.07 % | 76% | Groningen (GM0014) 2012 |
