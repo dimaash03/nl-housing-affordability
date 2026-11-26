@@ -17,8 +17,10 @@ separate dimension tables, which map 1:1 to the Power BI star schema.
 
 Robustness: all requests go through :func:`build_session`, a ``requests.Session``
 whose adapter retries transient failures (HTTP 429/500/502/503/504 and connection
-errors) with exponential backoff and honours the ``Retry-After`` header. A single
-hiccup of the CBS API therefore no longer fails a whole table.
+errors) with exponential backoff and honours the ``Retry-After`` header. urllib3's
+retry stops once the status line has arrived, so :func:`fetch_all` additionally
+retries a page whose *body* breaks off or is not valid JSON (:data:`BODY_ERRORS`).
+A single hiccup of the CBS API therefore no longer fails a whole table.
 
 Idempotency: a table is skipped when its ``metadata.json`` already exists,
 unless ``--force`` is given. Downloads are written to a temporary folder and
@@ -39,6 +41,7 @@ import json
 import logging
 import shutil
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -74,6 +77,18 @@ RETRY_STATUSES: tuple[int, ...] = (429, 500, 502, 503, 504)
 #: Max retries per request; with backoff 1 s the waits are 0, 2, 4, 8, 16 s (urllib3 skips the first).
 RETRY_TOTAL = 5
 RETRY_BACKOFF_FACTOR = 1.0
+
+#: Errors raised while reading or decoding a response *body* after a 200 status line
+#: (connection cut off half-way through a page, truncated JSON). urllib3's ``Retry`` does
+#: not cover these, so :func:`fetch_all` retries the page itself.
+BODY_ERRORS: tuple[type[Exception], ...] = (
+    requests.exceptions.ChunkedEncodingError,
+    requests.exceptions.ContentDecodingError,
+    requests.exceptions.JSONDecodeError,
+)
+#: Extra attempts per page for :data:`BODY_ERRORS`; waits BODY_BACKOFF_S * 2 ** n (2, 4, 8 s).
+BODY_RETRIES = 3
+BODY_BACKOFF_S = 2.0
 
 
 # --- URLs --------------------------------------------------------------------
@@ -127,15 +142,40 @@ def build_session(
     return session
 
 
+def _get_page(session: requests.Session, url: str, params: dict[str, str] | None) -> dict[str, Any]:
+    """GET one page and decode it, retrying :data:`BODY_ERRORS` with exponential backoff.
+
+    HTTP errors are not retried here: the session's adapter already retried the
+    transient ones, so ``raise_for_status()`` reports a final status.
+    """
+    for attempt in range(BODY_RETRIES + 1):
+        try:
+            resp = session.get(url, params=params, timeout=REQUEST_TIMEOUT_S)
+            resp.raise_for_status()
+            return resp.json()
+        except BODY_ERRORS as exc:
+            if attempt == BODY_RETRIES:
+                raise
+            wait = BODY_BACKOFF_S * 2**attempt
+            logger.warning(
+                "Broken response body (%s) from %s; retry %d/%d in %.0f s",
+                type(exc).__name__,
+                url,
+                attempt + 1,
+                BODY_RETRIES,
+                wait,
+            )
+            time.sleep(wait)
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
 def fetch_all(url: str, session: requests.Session) -> list[dict[str, Any]]:
     """GET an OData collection as JSON, following ``odata.nextLink`` pagination."""
     rows: list[dict[str, Any]] = []
     next_url: str | None = url
     params: dict[str, str] | None = {"$format": "json"}
     while next_url:
-        resp = session.get(next_url, params=params, timeout=REQUEST_TIMEOUT_S)
-        resp.raise_for_status()
-        payload = resp.json()
+        payload = _get_page(session, next_url, params)
         rows.extend(payload.get("value", []))
         next_url = payload.get("odata.nextLink")
         params = None  # nextLink already carries the query string

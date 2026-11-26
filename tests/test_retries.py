@@ -21,16 +21,25 @@ from nl_housing import ingest
 
 
 class ScriptedServer:
-    """Serves a scripted sequence of ``(status, headers)`` responses, then 200 + JSON."""
+    """Serves a scripted sequence of ``(status, headers)`` responses, then 200 + JSON.
+
+    ``body_faults`` (consumed first) simulate a broken *body* behind a ``200`` status line:
+    ``"truncate"`` closes the connection half-way through the announced ``Content-Length``,
+    ``"bad_json"`` sends a complete but cut-off JSON document.
+    """
 
     def __init__(self) -> None:
         self.script: list[tuple[int, dict[str, str]]] = []
+        self.body_faults: list[str] = []
         self.hits = 0
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self) -> None:  # noqa: N802 (name required by BaseHTTPRequestHandler)
                 outer.hits += 1
+                if outer.body_faults:
+                    self._send_broken_body(outer.body_faults.pop(0))
+                    return
                 status, headers = outer.script.pop(0) if outer.script else (200, {})
                 body = json.dumps({"value": [{"ID": 0}]} if status == 200 else {}).encode()
                 self.send_response(status)
@@ -40,6 +49,21 @@ class ScriptedServer:
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+
+            def _send_broken_body(self, fault: str) -> None:
+                body = json.dumps({"value": [{"ID": 0}]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                if fault == "truncate":
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body[: len(body) // 2])
+                    self.wfile.flush()
+                    self.close_connection = True
+                else:  # bad_json
+                    self.send_header("Content-Length", str(len(body) - 3))
+                    self.end_headers()
+                    self.wfile.write(body[:-3])
 
             def log_message(self, *args: object) -> None:  # keep pytest output clean
                 pass
@@ -101,6 +125,31 @@ def test_client_errors_are_not_retried(server: ScriptedServer, sleeps: list[floa
         ingest.fetch_all(server.url, _session())
     assert server.hits == 1
     assert sleeps == []
+
+
+@pytest.fixture
+def page_sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """Record the per-page body-retry sleeps of fetch_all instead of sleeping."""
+    recorded: list[float] = []
+    monkeypatch.setattr(ingest.time, "sleep", recorded.append)
+    return recorded
+
+
+@pytest.mark.parametrize("fault", ["truncate", "bad_json"])
+def test_broken_response_body_is_retried(server: ScriptedServer, page_sleeps: list[float], fault: str):
+    # urllib3's Retry only covers the connection and the status line; a body cut off
+    # half-way (common on the 8 MB feed pages of 86380NED) must not fail the whole table.
+    server.body_faults = [fault, fault]
+    assert ingest.fetch_all(server.url, _session()) == [{"ID": 0}]
+    assert server.hits == 3
+    assert page_sleeps == [ingest.BODY_BACKOFF_S, ingest.BODY_BACKOFF_S * 2]
+
+
+def test_broken_body_gives_up_after_body_retries(server: ScriptedServer, page_sleeps: list[float]):
+    server.body_faults = ["truncate"] * (ingest.BODY_RETRIES + 5)
+    with pytest.raises(requests.exceptions.ChunkedEncodingError):
+        ingest.fetch_all(server.url, _session())
+    assert server.hits == ingest.BODY_RETRIES + 1
 
 
 def test_default_session_config():
