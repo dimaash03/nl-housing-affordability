@@ -20,3 +20,6 @@ staging:
 marts:
   # Marts read from staging and reference (the committed herindeling mapping).
   - fct_affordability
+  - dim_municipality
+  - dim_province
+  - dim_year

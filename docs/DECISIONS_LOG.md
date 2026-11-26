@@ -164,3 +164,9 @@ different decisions (stage-2 QA H-2); #2 keeps D-018…D-021 and the proposals o
 - **Rationale:** One deflation definition shared by Python and Power BI; the fact stays row-level. PTI needs no real variant because price and income share the deflator.
 - **Alternatives:** all real growth columns in the fact (wider table, duplicated logic); deflate only in DAX (two definitions).
 - **Status:** approved (owner, 2026-11-26).
+
+## D-028 — Province columns denormalised into `dim_municipality`
+- **Decision:** `dim_municipality` carries `province_code` and `province_name`; `dim_province` exists as a separate dimension for province-level facts (group aggregates). Provinces follow the 2026 division for every year.
+- **Rationale:** A municipality never changes province within this model (2026 division), so copying two columns costs nothing and keeps the Power BI model a pure star: one relationship per fact key, no snowflake chain fact → municipality → province, which would force bidirectional filters or extra relationships.
+- **Alternatives:** snowflake (`dim_municipality` → `dim_province`), cleaner normalisation but a harder Power BI model; province only in `dim_province`.
+- **Status:** proposed (PR: marts dimensions).
