@@ -4,6 +4,11 @@ The tests use a throwaway HTTP server on 127.0.0.1, so the real ``requests`` /
 ``urllib3`` retry machinery is exercised without any external network. Sleeps are
 recorded instead of performed, which keeps the tests fast and lets us assert the
 backoff schedule and the ``Retry-After`` handling exactly.
+
+Tests that use the ``server`` fixture carry the ``loopback`` marker: they need permission to open
+a socket on 127.0.0.1. Some sandboxes (e.g. agent or IDE sandboxes) block that; there the fixture
+fails with an explicit message, and ``pytest -m "not loopback"`` runs everything else. CI and a
+normal developer machine run them all.
 """
 
 from __future__ import annotations
@@ -74,7 +79,14 @@ class ScriptedServer:
 
 @pytest.fixture
 def server() -> Iterator[ScriptedServer]:
-    srv = ScriptedServer()
+    try:
+        srv = ScriptedServer()
+    except OSError as exc:  # PermissionError in sandboxes that forbid binding a local socket
+        pytest.fail(
+            f"cannot open a test HTTP server on 127.0.0.1 ({exc}). This environment blocks local sockets; "
+            'run `pytest -m "not loopback"` here and the full suite on a normal machine or in CI.',
+            pytrace=False,
+        )
     thread = threading.Thread(target=srv.httpd.serve_forever, daemon=True)
     thread.start()
     yield srv
@@ -96,6 +108,7 @@ def _session(**kwargs: float) -> requests.Session:
     return session
 
 
+@pytest.mark.loopback
 def test_retries_transient_5xx_with_exponential_backoff(server: ScriptedServer, sleeps: list[float]):
     server.script = [(503, {}), (502, {}), (500, {})]
     rows = ingest.fetch_all(server.url, _session(backoff_factor=0.5))
@@ -105,6 +118,7 @@ def test_retries_transient_5xx_with_exponential_backoff(server: ScriptedServer, 
     assert sleeps == [1.0, 2.0]
 
 
+@pytest.mark.loopback
 def test_respects_retry_after_header(server: ScriptedServer, sleeps: list[float]):
     server.script = [(429, {"Retry-After": "7"})]
     assert ingest.fetch_all(server.url, _session(backoff_factor=0.5)) == [{"ID": 0}]
@@ -112,6 +126,7 @@ def test_respects_retry_after_header(server: ScriptedServer, sleeps: list[float]
     assert sleeps == [7.0]
 
 
+@pytest.mark.loopback
 def test_gives_up_after_total_retries_with_http_error(server: ScriptedServer, sleeps: list[float]):
     server.script = [(500, {})] * 10
     with pytest.raises(requests.HTTPError, match="500"):
@@ -119,6 +134,7 @@ def test_gives_up_after_total_retries_with_http_error(server: ScriptedServer, sl
     assert server.hits == 3  # first attempt + 2 retries
 
 
+@pytest.mark.loopback
 def test_client_errors_are_not_retried(server: ScriptedServer, sleeps: list[float]):
     server.script = [(404, {})]
     with pytest.raises(requests.HTTPError, match="404"):
@@ -135,6 +151,7 @@ def page_sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
     return recorded
 
 
+@pytest.mark.loopback
 @pytest.mark.parametrize("fault", ["truncate", "bad_json"])
 def test_broken_response_body_is_retried(server: ScriptedServer, page_sleeps: list[float], fault: str):
     # urllib3's Retry only covers the connection and the status line; a body cut off
@@ -145,6 +162,7 @@ def test_broken_response_body_is_retried(server: ScriptedServer, page_sleeps: li
     assert page_sleeps == [ingest.BODY_BACKOFF_S, ingest.BODY_BACKOFF_S * 2]
 
 
+@pytest.mark.loopback
 def test_broken_body_gives_up_after_body_retries(server: ScriptedServer, page_sleeps: list[float]):
     server.body_faults = ["truncate"] * (ingest.BODY_RETRIES + 5)
     with pytest.raises(requests.exceptions.ChunkedEncodingError):

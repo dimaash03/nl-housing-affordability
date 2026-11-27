@@ -2,7 +2,10 @@ PYTHON ?= python3
 VENV   := .venv
 BIN    := $(VENV)/bin
 
-.PHONY: setup setup-locked lock ingest load transform check export test lint format clean-data help
+.PHONY: setup setup-locked lock ingest load transform check export build reproduce test lint format clean-data help
+
+# Extra pytest arguments, e.g. in a sandbox that blocks local sockets:  make test PYTEST_ARGS='-m "not loopback"'
+PYTEST_ARGS ?=
 
 help:  ## Show available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -51,8 +54,18 @@ check:  ## Run the SQL data tests (sql/tests/*.sql) against the built database
 export:  ## Export the marts tables to data/processed/marts/*.parquet (for Power BI)
 	$(BIN)/python -m nl_housing.export
 
-test:  ## Run the offline unit tests
-	$(BIN)/python -m pytest
+build:  ## load -> transform -> check -> export (data/raw/ must already be downloaded)
+	$(MAKE) load
+	$(MAKE) transform
+	$(MAKE) check
+	$(MAKE) export
+
+reproduce:  ## Full run from an empty data/ folder: ingest + build (needs internet for CBS)
+	$(MAKE) ingest
+	$(MAKE) build
+
+test:  ## Run the offline unit tests (PYTEST_ARGS=... for extra pytest options)
+	$(BIN)/python -m pytest $(PYTEST_ARGS)
 
 lint:  ## Lint and check formatting with ruff (config in pyproject.toml)
 	$(BIN)/ruff check .

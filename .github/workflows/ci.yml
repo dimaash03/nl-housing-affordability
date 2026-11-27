@@ -1,0 +1,79 @@
+# Lint + offline unit tests on every push to main and every pull request.
+#
+#   locked        Python 3.13, exact versions (requirements.lock + requirements-geo.lock), ruff, all tests
+#   lower-bounds  Python 3.11 = minimum supported, newest versions allowed by requirements*.txt, all tests
+#
+# Both jobs install the geo extras and set NL_HOUSING_REQUIRE_GEO, so the geo tests run instead of
+# being skipped, and both run the loopback (local HTTP server) retry tests.
+#
+# The data pipeline itself needs CBS and is NOT part of PR CI (a CBS outage or revision must not
+# block a code review). Run it on demand: Actions -> CI -> "Run workflow" (job `pipeline`).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.name }}, Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: locked
+            python: "3.13"
+          - name: lower-bounds
+            python: "3.11"
+    env:
+      NL_HOUSING_REQUIRE_GEO: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install (locked)
+        if: matrix.name == 'locked'
+        run: make setup-locked setup-geo
+      - name: Install (lower bounds)
+        if: matrix.name == 'lower-bounds'
+        run: |
+          make setup
+          .venv/bin/pip install -r requirements-geo.txt
+      - name: Lint
+        if: matrix.name == 'locked'
+        run: make lint
+      - name: Unit tests (no skips allowed)
+        run: |
+          make test PYTEST_ARGS="-rs" | tee pytest.log
+          if grep -q "SKIPPED" pytest.log; then echo "::error::tests were skipped"; exit 1; fi
+
+  pipeline:
+    # Full reproduction from CBS: ingest -> load -> transform -> check -> export. Manual only.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: make setup-locked
+      - run: make reproduce
+      - name: Row counts of the exported marts
+        run: |
+          .venv/bin/python - <<'EOF'
+          import duckdb, pathlib
+          for p in sorted(pathlib.Path("data/processed/marts").glob("*.parquet")):
+              n = duckdb.sql(f"select count(*) from '{p}'").fetchone()[0]
+              print(f"{p.name:35s} {n:6d}")
+          EOF

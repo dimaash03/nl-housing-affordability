@@ -4,13 +4,19 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 from pathlib import Path
 
 import pytest
 
-pytest.importorskip("shapely")
-pytest.importorskip("pyproj")
-pytest.importorskip("topojson")
+if os.environ.get("NL_HOUSING_REQUIRE_GEO"):  # CI: a missing geo extra must fail, not skip
+    import pyproj  # noqa: F401
+    import shapely  # noqa: F401
+    import topojson  # noqa: F401
+else:
+    pytest.importorskip("shapely")
+    pytest.importorskip("pyproj")
+    pytest.importorskip("topojson")
 
 import shapely  # noqa: E402
 from shapely.geometry import mapping, shape  # noqa: E402
