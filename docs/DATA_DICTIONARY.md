@@ -147,7 +147,11 @@ All amounts in euro after unit conversion. `y` = year, `m` = municipality (2026 
 | Single G4 city | municipality row | municipality row |
 | G4 combined | transaction-weighted (`85792NED.VerkochteWoningen_4`) | household-weighted mean of medians *(approx.)* |
 | Rest of NL | `(p_NL * n_NL - sum_g p_g * n_g) / (n_NL - sum_g n_g)` — exact | household-weighted mean of medians *(approx.)* |
-| Rest of Randstad provinces | owner-stock-weighted mean *(approx.)* | household-weighted mean of medians *(approx.)* |
+| Rest of Randstad provinces | `(sum_PV26-28 p * n - sum_g p_g * n_g) / (sum n - sum n_g)` — exact (D-029) | household-weighted mean of medians *(approx.)* |
+
+Built in `marts.fct_group_affordability` (group_type × group_code × year, 270 rows); `price_method` / `income_method`
+say which rule produced each value. Prices come from `85792NED` in the boundaries of each year, so the G4 price excludes
+Weesp before 2022 (limitation; group incomes use the 2026 division).
 
 Never average municipal ratios unweighted for a headline figure. Validation: the household-weighted mean of medians over all 342 municipalities must stay within 2 % of the official NL median for every year (2011: +0.57 %, 2024: +0.80 %).
 

@@ -169,4 +169,11 @@ different decisions (stage-2 QA H-2); #2 keeps D-018…D-021 and the proposals o
 - **Decision:** `dim_municipality` carries `province_code` and `province_name`; `dim_province` exists as a separate dimension for province-level facts (group aggregates). Provinces follow the 2026 division for every year.
 - **Rationale:** A municipality never changes province within this model (2026 division), so copying two columns costs nothing and keeps the Power BI model a pure star: one relationship per fact key, no snowflake chain fact → municipality → province, which would force bidirectional filters or extra relationships.
 - **Alternatives:** snowflake (`dim_municipality` → `dim_province`), cleaner normalisation but a harder Power BI model; province only in `dim_province`.
-- **Status:** proposed (PR: marts dimensions).
+- **Status:** approved (owner merged PR #10, 2026-11-26).
+
+## D-029 — Rest of Randstad provinces price: exact residual
+- **Decision:** The price of "Rest of Randstad provinces" is the exact residual `(PV26 + PV27 + PV28) minus G4` with `85792NED` average prices and transaction counts, like Rest of NL. Replaces the owner-stock-weighted approximation in D-016.
+- **Rationale:** `85792NED` publishes counts for the 12 provinces, so the exact value is available at no extra cost; an exact figure is easier to defend than an approximation. `assert_group_aggregates.sql` checks that `85792NED` and `83625NED` agree on NL and province prices (they do, to the euro), that counts add up to NL and that G4 + Rest recombine to the NL price.
+- **Alternatives:** owner-stock-weighted mean of harmonised municipal prices (needs a harmonised stock per 2026 municipality; approximate).
+- **Limitation:** `85792NED` reports each year in that year's boundaries, so Weesp is outside the G4 price before 2022.
+- **Status:** proposed (PR: group aggregates + export).

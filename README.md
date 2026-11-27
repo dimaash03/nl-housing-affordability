@@ -88,6 +88,7 @@ make ingest      # download all tables in config/cbs_tables.yaml to data/raw/ (F
 make load        # load data/raw/ into data/nl_housing.duckdb, schema `raw`
 make transform   # build the SQL models into schemas `staging` / `marts` (order: sql/models.yaml)
 make check       # run the SQL data tests in sql/tests/ against the database
+make export      # write the marts tables to data/processed/marts/*.parquet (Power BI input)
 make test        # run unit tests (no network needed)
 make lint        # ruff lint + format check (`make format` fixes)
 

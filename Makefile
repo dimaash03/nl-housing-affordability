@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV   := .venv
 BIN    := $(VENV)/bin
 
-.PHONY: setup setup-locked lock ingest load transform check test lint format clean-data help
+.PHONY: setup setup-locked lock ingest load transform check export test lint format clean-data help
 
 help:  ## Show available targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-12s %s\n", $$1, $$2}'
@@ -47,6 +47,9 @@ transform:  ## Build the SQL models (sql/models.yaml order) into schemas staging
 
 check:  ## Run the SQL data tests (sql/tests/*.sql) against the built database
 	$(BIN)/python -m nl_housing.check
+
+export:  ## Export the marts tables to data/processed/marts/*.parquet (for Power BI)
+	$(BIN)/python -m nl_housing.export
 
 test:  ## Run the offline unit tests
 	$(BIN)/python -m pytest
