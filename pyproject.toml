@@ -7,7 +7,7 @@ name = "nl-housing"
 version = "0.1.0"
 description = "Housing affordability across Dutch municipalities (CBS StatLine -> DuckDB -> Power BI)."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"   # duckdb 2.x (requirements.txt) has no Python 3.10 wheels
 # Runtime dependencies are pinned in requirements.txt; this file only makes
 # `src/nl_housing` importable (`pip install -e .`).
 
@@ -17,11 +17,14 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-addopts = "-ra"
+addopts = "-ra --strict-markers"
+markers = [
+    "loopback: needs a local HTTP server on 127.0.0.1 (deselect with -m 'not loopback' in sandboxes that block sockets)",
+]
 
 [tool.ruff]
 line-length = 120          # the codebase is written to 120 columns
-target-version = "py310"   # minimum supported Python (requires-python)
+target-version = "py311"   # minimum supported Python (requires-python)
 src = ["src", "tests"]
 
 [tool.ruff.lint]

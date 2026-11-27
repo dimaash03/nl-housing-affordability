@@ -34,7 +34,7 @@ Pipeline: CBS OData → Python → DuckDB (raw → staging → marts) → notebo
 - Header comment: source, grain, filters.
 
 ## Python style
-- Python 3.10+, type hints, docstrings, `logging` (no `print` in library code).
+- Python 3.11+ (DuckDB 2.x), type hints, docstrings, `logging` (no `print` in library code).
 - `pathlib` paths relative to `config.REPO_ROOT`; no absolute paths.
 - CLIs via `python -m nl_housing.<module>`; keep steps idempotent.
 - Tests must run offline (mock HTTP, use `tmp_path`); run `make test` before committing.

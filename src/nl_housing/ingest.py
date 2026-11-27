@@ -42,7 +42,7 @@ import logging
 import shutil
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -270,7 +270,7 @@ def download_table(
             "title": title,
             "config_name": table.name,
             "catalog": table.catalog,
-            "downloaded_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "downloaded_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
             "row_count": int(len(data)),
             "column_count": int(data.shape[1]),
             "source_url": source_url,

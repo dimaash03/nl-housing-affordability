@@ -65,7 +65,7 @@ import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -247,7 +247,7 @@ class Download:
     pages: int
     number_matched: int | None = None
     content_crs: str | None = None
-    downloaded_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
+    downloaded_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat(timespec="seconds"))
 
 
 def fetch_features(
@@ -838,7 +838,7 @@ def run(
             }
             for kind in ("geojson", "topojson")
         },
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
     }
     _write_atomic(paths["metadata"], json.dumps(metadata, indent=2, ensure_ascii=False) + "\n")
     for kind in ("geojson", "topojson", "metadata"):
