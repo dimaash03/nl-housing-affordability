@@ -1,7 +1,8 @@
 -- 86141NED is based 2025 = 100: the yearly average for 2025 must be exactly 100,
--- and every year of the analysis window 2011-2025 must be present.
+-- and every year of the analysis window (reference.project_settings, 2011-2025) must be present.
 with expected_years as (
-    select unnest(range(2011, 2026)) as year
+    select unnest(range(year_from, year_to + 1)) as year
+    from reference.project_settings
 )
 
 select e.year, c.cpi_2025_index

@@ -18,8 +18,11 @@
 #   downloads the complete table through the ODataFeed endpoint.
 # - Status: approved 2026-11-22 (see docs/DECISIONS_LOG.md).
 
+# `project` is the single source of truth for the analysis parameters: nl_housing.transform writes it to
+# reference.project_settings before every build, and the SQL models and data tests read it from there.
+# Change a value here, then `make transform && make check` (the tests tell you what no longer fits).
 project:
-  analysis_years: [2011, 2025]          # 2025 income is preliminary ("Voorlopig")
+  analysis_years: [2011, 2025]          # first year = base year of every growth column; 2025 income is preliminary
   target_municipal_boundaries: 2026     # municipal division of 1 January 2026 (342 municipalities)
   randstad_g4: [GM0363, GM0599, GM0518, GM0344]  # Amsterdam, Rotterdam, 's-Gravenhage, Utrecht
   randstad_provinces: [PV26, PV27, PV28]         # Utrecht, Noord-Holland, Zuid-Holland (D-010, secondary split)

@@ -38,5 +38,5 @@ select
     year,
     avg_sale_price_eur
 from yearly
-where year >= 2011
+where year >= (select year_from from reference.project_settings)   -- analysis window start (config)
   and avg_sale_price_eur is not null

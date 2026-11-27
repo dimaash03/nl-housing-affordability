@@ -1,9 +1,14 @@
 -- Star schema integrity for the marts layer. Returns one row per violation.
---   - fct_affordability: exactly 342 municipalities x 15 years, unique on (municipality_code, year)
+--   - fct_affordability: exactly 342 municipalities x n_years (15 for 2011-2025, reference.project_settings),
+--     unique on (municipality_code, year)
 --   - each dimension unique on its key, with the expected row count
 --   - every fact key exists in its dimension (no orphan rows in Power BI relationships)
 --   - G4 = exactly the four cities of D-010; every municipality has a region group
 with
+
+n_years as (
+    select year_to - year_from + 1 as n from reference.project_settings
+),
 
 fct_counts as (
     select
@@ -13,8 +18,8 @@ fct_counts as (
 ),
 
 issues as (
-    select 'fct_affordability row count <> 5130' as issue, n_rows::varchar as detail
-    from fct_counts where n_rows <> 342 * 15
+    select 'fct_affordability row count <> 342 x n_years' as issue, n_rows::varchar as detail
+    from fct_counts where n_rows <> 342 * (select n from n_years)
     union all
     select 'fct_affordability duplicate keys', (n_rows - n_keys)::varchar
     from fct_counts where n_rows <> n_keys
@@ -27,9 +32,9 @@ issues as (
     from marts.dim_province
     having count(*) <> 12 or count(distinct province_code) <> 12
     union all
-    select 'dim_year rows <> 15 or not unique', count(*)::varchar
+    select 'dim_year rows <> n_years or not unique', count(*)::varchar
     from marts.dim_year
-    having count(*) <> 15 or count(distinct year) <> 15
+    having count(*) <> (select n from n_years) or count(distinct year) <> (select n from n_years)
     union all
     select 'fct municipality_code missing in dim_municipality', f.municipality_code
     from marts.fct_affordability as f

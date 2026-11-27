@@ -58,6 +58,6 @@ select
     dwelling_stock * owner_occupied_share_pct / 100 as owner_occupied_stock,
     mean_woz_value_eur
 from yearly
-where year >= 2011
+where year >= (select year_from from reference.project_settings)   -- analysis window start (config)
   and coalesce(population, households_count, avg_household_size, dwelling_stock,
                owner_occupied_share_pct, mean_woz_value_eur) is not null

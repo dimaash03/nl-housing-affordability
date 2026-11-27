@@ -6,10 +6,11 @@
 --          marts.fct_affordability              (municipal medians and household counts, 2026 division)
 --          marts.dim_municipality               (region groups, D-010)
 --          staging.stg_cbs__cpi                 (86141NED, CPI 2025 = 100)
--- Grain:   one row per group_type x group_code x year 2011-2025:
+--          reference.project_settings           (config/cbs_tables.yaml: analysis window, base year)
+-- Grain:   one row per group_type x group_code x year of the analysis window (2011-2025):
 --            nl (1) + province (12) + region_group (G4, Rest of NL) + region_group_3 (G4,
 --            Rest of Randstad provinces, Rest of NL) = 18 groups x 15 years = 270 rows.
--- Filters: analysis window 2011-2025 (D-008).
+-- Filters: analysis window year_from..year_to from reference.project_settings (D-008).
 -- Decisions:
 --   D-016  A group PTI is group price / group income, NEVER the mean of municipal PTIs.
 --          Price: published CBS row where one exists (NL, province); G4 = transaction-weighted mean of
@@ -24,8 +25,14 @@
 
 with
 
+settings as (
+    select year_from, year_to, base_year
+    from reference.project_settings
+),
+
 years as (
-    select unnest(range(2011, 2026))::integer as year
+    select unnest(range(year_from, year_to + 1))::integer as year
+    from settings
 ),
 
 -- 1. Transactions and mean prices from 85792NED. The residual formula needs price and count from the
@@ -33,7 +40,7 @@ years as (
 tx as (
     select region_code, year, avg_sale_price_eur, transactions_count
     from staging.stg_cbs__house_price_index
-    where year between 2011 and 2025
+    where year in (select year from years)
 ),
 
 g4_tx as (
@@ -76,7 +83,7 @@ prices as (
         'cbs_published'                                              as price_method
     from staging.stg_cbs__house_prices
     where region_type in ('NL', 'PV')
-      and year between 2011 and 2025
+      and year in (select year from years)
 
     union all
     -- G4 combined: transaction-weighted mean (two-way and three-way split share the value).
@@ -156,7 +163,7 @@ incomes as (
     from staging.stg_cbs__household_income
     where region_type in ('NL', 'PV')
       and household_group = 'all'
-      and year between 2011 and 2025
+      and year in (select year from years)
 
     union all
     -- Region groups: household-weighted mean of municipal medians (approximation, D-016).
@@ -239,10 +246,10 @@ metrics as (
         avg_sale_price_eur * 100 / cpi_2025_index                                  as real_avg_sale_price_eur_2025,
         median_disposable_income_eur * 100 / cpi_2025_index                        as real_median_disposable_income_eur_2025,
         (avg_sale_price_eur
-            / max(case when year = 2011 then avg_sale_price_eur end)
+            / max(case when year = (select base_year from settings) then avg_sale_price_eur end)
                   over (partition by group_type, group_code) - 1) * 100            as price_growth_since_2011_pct,
         (median_disposable_income_eur
-            / max(case when year = 2011 then median_disposable_income_eur end)
+            / max(case when year = (select base_year from settings) then median_disposable_income_eur end)
                   over (partition by group_type, group_code) - 1) * 100            as income_growth_since_2011_pct
     from joined
 )
@@ -266,6 +273,9 @@ select
     price_growth_since_2011_pct - income_growth_since_2011_pct  as growth_gap_pp,
     price_method,
     income_method,
+    -- true where the group income is the household-weighted mean of municipal medians (G4 / Rest groups),
+    -- not a published CBS median; bounded at NL level by assert_income_weighted_median_vs_nl.sql (D-016)
+    income_method <> 'cbs_published'                            as is_income_approximated,
     is_preliminary
 from metrics
 order by group_type, group_sort, year

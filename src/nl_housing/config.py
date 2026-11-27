@@ -175,3 +175,91 @@ def load_tables_config(path: Path | None = None, root: Path = REPO_ROOT) -> list
     tables = parse_tables_config(data)
     logger.info("Loaded %d table(s) from %s", len(tables), config_path.name)
     return tables
+
+
+# --- Project settings (single source of truth for the SQL models) --------------
+
+_GM_CODE = re.compile(r"^GM\d{4}$")
+_PV_CODE = re.compile(r"^PV\d{2}$")
+
+
+@dataclass(frozen=True)
+class ProjectSettings:
+    """Analysis parameters from the ``project:`` section of ``config/cbs_tables.yaml``.
+
+    ``nl_housing.transform`` writes these values to ``reference.project_settings`` before it builds
+    the models, so the SQL reads the analysis window, the G4 list and the Randstad provinces from
+    the config instead of repeating them as literals.
+    """
+
+    year_from: int
+    year_to: int
+    g4_codes: tuple[str, ...]
+    randstad_province_codes: tuple[str, ...]
+    low_reliability_max_households: int
+
+    @property
+    def base_year(self) -> int:
+        """Base year of every growth column (= first year of the analysis window, D-008)."""
+        return self.year_from
+
+    @property
+    def n_years(self) -> int:
+        return self.year_to - self.year_from + 1
+
+
+def _code_list(value: Any, pattern: re.Pattern[str], key: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        raise ConfigError(f"project.{key} must be a non-empty list of codes")
+    codes = tuple(str(v).strip() for v in value)
+    bad = [c for c in codes if not pattern.match(c)]
+    if bad:
+        raise ConfigError(f"project.{key} has invalid codes {bad} (expected pattern {pattern.pattern})")
+    if len(set(codes)) != len(codes):
+        raise ConfigError(f"project.{key} lists a code more than once: {list(codes)}")
+    return codes
+
+
+def parse_project_settings(data: Any) -> ProjectSettings:
+    """Parse and validate the ``project:`` section of the loaded YAML document."""
+    project = data.get("project") if isinstance(data, dict) else None
+    if not isinstance(project, dict):
+        raise ConfigError("Config has no 'project' section (analysis_years, randstad_g4, randstad_provinces, ...)")
+
+    years = project.get("analysis_years")
+    if (
+        not isinstance(years, list)
+        or len(years) != 2
+        or not all(isinstance(y, int) and not isinstance(y, bool) for y in years)
+        or years[0] > years[1]
+    ):
+        raise ConfigError(f"project.analysis_years must be [first_year, last_year] (integers), got {years!r}")
+
+    threshold = project.get("low_reliability_max_households")
+    if not isinstance(threshold, int) or isinstance(threshold, bool) or threshold < 0:
+        raise ConfigError(f"project.low_reliability_max_households must be a non-negative integer, got {threshold!r}")
+
+    return ProjectSettings(
+        year_from=years[0],
+        year_to=years[1],
+        g4_codes=_code_list(project.get("randstad_g4"), _GM_CODE, "randstad_g4"),
+        randstad_province_codes=_code_list(project.get("randstad_provinces"), _PV_CODE, "randstad_provinces"),
+        low_reliability_max_households=threshold,
+    )
+
+
+def load_project_settings(path: Path | None = None, root: Path = REPO_ROOT) -> ProjectSettings:
+    """Read the ``project:`` section of the table config (``config/cbs_tables.yaml`` or the example)."""
+    config_path = path or resolve_tables_config_path(root)
+    with config_path.open(encoding="utf-8") as fh:
+        data = yaml.safe_load(fh)
+    settings = parse_project_settings(data)
+    logger.info(
+        "Project settings from %s: years %d-%d, %d G4 code(s), %d Randstad province(s)",
+        config_path.name,
+        settings.year_from,
+        settings.year_to,
+        len(settings.g4_codes),
+        len(settings.randstad_province_codes),
+    )
+    return settings

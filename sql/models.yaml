@@ -8,7 +8,9 @@
 #   the runner fails otherwise, so this file cannot silently drift from the folder.
 
 staging:
-  # Staging models read only from `raw` and are independent of each other.
+  # Staging models read from `raw` (plus reference.project_settings for the first analysis year)
+  # and are independent of each other. reference.project_settings is written by the runner itself
+  # from config/cbs_tables.yaml `project:` before the first model runs.
   - stg_cbs__house_prices
   - stg_cbs__household_income
   - stg_cbs__regional_key_figures
@@ -18,7 +20,8 @@ staging:
   - stg_cbs__regions_history
 
 marts:
-  # Marts read from staging and reference (the committed herindeling mapping).
+  # Marts read from staging and reference (herindeling mapping, project settings).
+  # dim_year reads fct_affordability (which years really have data), so it runs after it.
   - fct_affordability
   - dim_municipality
   - dim_province

@@ -1,5 +1,6 @@
 -- dim_municipality
 -- Source:  staging.stg_cbs__municipalities_2026 (86247NED, the 342 municipalities of 1 January 2026)
+--          reference.project_settings           (config/cbs_tables.yaml: randstad_g4, randstad_provinces)
 -- Grain:   one row per municipality_code (2026 division) -> 342 rows. Joins to fct_affordability on
 --          municipality_code (many-to-one) and to dim_province on province_code.
 -- Filters: none.
@@ -17,18 +18,19 @@ municipalities as (
     select * from staging.stg_cbs__municipalities_2026
 ),
 
--- The four G4 cities (D-010). Listed once; every group column derives from this CTE.
+-- The four G4 cities (D-010) from config/cbs_tables.yaml `randstad_g4`; the config order
+-- (Amsterdam, Rotterdam, 's-Gravenhage, Utrecht) is the sort order. Every group column derives from here.
+-- The agreed lists themselves are asserted in sql/tests/assert_region_groups.sql.
 g4 as (
-    select * from (values
-        ('GM0363', 1),   -- Amsterdam
-        ('GM0599', 2),   -- Rotterdam
-        ('GM0518', 3),   -- 's-Gravenhage (Den Haag)
-        ('GM0344', 4)    -- Utrecht
-    ) as t(municipality_code, g4_sort_order)
+    select
+        unnest(g4_codes)                                   as municipality_code,
+        unnest(range(1, len(g4_codes) + 1))::integer       as g4_sort_order
+    from reference.project_settings
 ),
 
 randstad_provinces as (
-    select * from (values ('PV26'), ('PV27'), ('PV28')) as t(province_code)
+    select unnest(randstad_province_codes) as province_code
+    from reference.project_settings
 ),
 
 -- CBS labels are Dutch; English labels for the dashboard. Codes 1-5 from 86247NED Code_54.

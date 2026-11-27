@@ -22,6 +22,11 @@ match, so a new file cannot be forgotten.
 All models run in one transaction: if any model fails, nothing is changed and the
 previous tables stay in place.
 
+Before the models, the runner writes the ``project:`` section of ``config/cbs_tables.yaml``
+(analysis window, G4 codes, Randstad provinces, low-reliability threshold) to the one-row table
+``reference.project_settings``. Models and data tests read those values from there, so the
+config is the single source of truth and no year range or code list is repeated in SQL.
+
 Usage::
 
     python -m nl_housing.transform
@@ -137,9 +142,50 @@ def model_select(con: duckdb.DuckDBPyConnection, model: Model) -> str:
     return single_select(con, model.path.read_text(encoding="utf-8"), model.path.name)
 
 
-def run(root: Path = config.REPO_ROOT, db_path: Path | None = None) -> dict[str, int]:
-    """Build every model in order; return ``{table: row_count}``."""
+SETTINGS_TABLE = "reference.project_settings"
+
+
+def write_project_settings(con: duckdb.DuckDBPyConnection, settings: config.ProjectSettings) -> None:
+    """(Re)create ``reference.project_settings`` (one row) from the ``project:`` section of the config.
+
+    The models read the analysis window, the G4 list and the Randstad provinces from this table, so
+    the config is the only place where they are set. It is rewritten on every run (inside the
+    transform transaction), so a config change takes effect without `make load`.
+    """
+    con.execute("CREATE SCHEMA IF NOT EXISTS reference")
+    con.execute(
+        f"""
+        CREATE OR REPLACE TABLE {SETTINGS_TABLE} AS
+        SELECT
+            ?::integer   AS year_from,
+            ?::integer   AS year_to,
+            ?::integer   AS base_year,
+            ?::varchar[] AS g4_codes,
+            ?::varchar[] AS randstad_province_codes,
+            ?::integer   AS low_reliability_max_households
+        """,
+        [
+            settings.year_from,
+            settings.year_to,
+            settings.base_year,
+            list(settings.g4_codes),
+            list(settings.randstad_province_codes),
+            settings.low_reliability_max_households,
+        ],
+    )
+
+
+def run(
+    root: Path = config.REPO_ROOT,
+    db_path: Path | None = None,
+    settings: config.ProjectSettings | None = None,
+) -> dict[str, int]:
+    """Build every model in order; return ``{table: row_count}``.
+
+    ``settings`` defaults to the ``project:`` section of the table config under ``root``.
+    """
     plan = load_plan(root)
+    settings = settings or config.load_project_settings(root=root)
     db_path = db_path or config.duckdb_path(root)
     if not db_path.exists():
         raise TransformError(f"DuckDB file not found: {db_path} - run `make load` first")
@@ -148,6 +194,7 @@ def run(root: Path = config.REPO_ROOT, db_path: Path | None = None) -> dict[str,
     with duckdb.connect(str(db_path)) as con:
         con.execute("BEGIN TRANSACTION")
         try:
+            write_project_settings(con, settings)
             for layer in plan:  # also for empty layers, so downstream tools can rely on the schema
                 con.execute(f"CREATE SCHEMA IF NOT EXISTS {layer}")
             for model in (m for models in plan.values() for m in models):
@@ -172,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     try:
         run()
-    except (TransformError, duckdb.Error) as exc:
+    except (TransformError, config.ConfigError, duckdb.Error) as exc:
         logger.error("Transform failed: %s", exc)
         return 1
     return 0
