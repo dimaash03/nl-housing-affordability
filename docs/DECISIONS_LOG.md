@@ -177,3 +177,23 @@ different decisions (stage-2 QA H-2); #2 keeps D-018…D-021 and the proposals o
 - **Alternatives:** owner-stock-weighted mean of harmonised municipal prices (needs a harmonised stock per 2026 municipality; approximate).
 - **Limitation:** `85792NED` reports each year in that year's boundaries, so Weesp is outside the G4 price before 2022.
 - **Status:** proposed (PR: group aggregates + export).
+
+## D-030 — "Latest year" flags follow the loaded data
+- **Decision:** `dim_year.is_latest_year` (= last year of the configured window) is replaced by `is_latest_data_year` = last year in which at least one municipality has a PTI, and `is_latest_final_year` uses the same rule restricted to final income. `dim_year` also gets `has_price_data`, `has_income_data`, `has_pti_data` and `municipalities_with_pti`.
+- **Rationale:** A flag called "latest" must not point at a year without data. With the old rule, a configured but not yet published (or not loaded) year would become the default year of every "latest" card in Power BI and show blanks. Tested by blanking the 2025 income in a copy of the database: the flags move to 2024. The column is renamed rather than redefined, so nobody reads the old meaning into the old name.
+- **Alternatives:** keep `is_latest_year` and redefine it (silent change of meaning); require both price and income per municipality (stricter, but one suppressed small municipality would then never block a year — `has_pti_data` already means "a ratio exists").
+- **Status:** proposed (PR: review follow-ups 2026-11-27).
+
+## D-031 — `config/cbs_tables.yaml` is the single source of truth for analysis parameters
+- **Decision:** `nl_housing.transform` writes the `project:` section (analysis window, base year = first year, G4 codes, Randstad provinces, low-reliability threshold) to the one-row table `reference.project_settings` before the models run; staging, marts and data tests read it from there. No year range or code list is repeated in model SQL.
+- **Rationale:** Before, the window `2011–2025` was a literal in 10+ places while the comments pointed at the config, which nothing read. A table instead of SQL templating keeps every model a plain, runnable SELECT (no Jinja) and lets the data tests see the same values.
+- **Kept as literals on purpose:** the agreed group rules in `sql/tests/assert_region_groups.sql` (G4, PV26–28, group sizes 4 / 116 / 222). A test that reads the expected values from the same config cannot catch a wrong config. The growth columns are still named `*_since_2011_*` (D-017); `assert_project_settings.sql` fails if the base year changes without renaming them.
+- **Verified:** rebuilding with the new code reproduces every staging and marts table of `main` (identical rows; `fct_affordability` floats equal to 1e-10 EUR — summation order changed with the query plan); a rebuild with window 2013–2024 gives 342 × 12 rows and fails only the base-year naming guard, as intended.
+- **Alternatives:** Jinja / dbt variables (more machinery for 5 parameters); keep literals and add a test that greps the SQL (catches drift, but still two places to edit).
+- **Status:** proposed (PR: review follow-ups 2026-11-27).
+
+## D-032 — Minimum Python 3.11 / DuckDB 2.x
+- **Decision:** `requires-python >= 3.11`, `duckdb >= 2.0.1`.
+- **Rationale:** On Python 3.10 pip resolves DuckDB 1.5.6 (DuckDB 2.x ships no 3.10 wheels), and DuckDB 1.x cannot plan `fct_affordability` ("Not implemented Error: Cannot perform non-inner join on subquery"); the README promised 3.10+. Verified 2026-11-27: Python 3.11 with the newest versions allowed by `requirements.txt` runs the full build (12 models, 21/21 checks) and all 174 unit tests; CI runs that combination on every PR.
+- **Alternatives:** rewrite the correlated `exists` in `fct_affordability` for DuckDB 1.x (keeps 3.10, but pins the project to an old engine).
+- **Status:** proposed (PR: review follow-ups 2026-11-27).
