@@ -1,7 +1,7 @@
 # Project status
 
 **Last updated:** 2026-11-28
-**Current stage:** 5. Power BI — semantic model as code in PR (feat/powerbi-model); next: open in Power BI Desktop, verify, build the report pages
+**Current stage:** 5. Power BI — semantic model as code merged (PR #15); next: open in Power BI Desktop, verify, build the report pages
 
 Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star schema) → 4. Analysis (notebooks) → 5. Power BI dashboard → 6. Write-up (README insights, limitations).
 
@@ -48,7 +48,7 @@ Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star
 
 - 2026-11-28 (EDA follow-ups merged as PR #14). Owner decisions on D-038: default income basis = all households
   with a switch; owner-occupier group income moves into the mart.
-- 2026-11-28 (stage 5, PR feat/powerbi-model): owner chose "Claude generates the model (PBIP/TMDL), owner builds the
+- 2026-11-28 (stage 5, PR #15, merged 2026-11-28): owner chose "Claude generates the model (PBIP/TMDL), owner builds the
   visuals". `fct_group_affordability` + owner-occupier income / PTI / households and `group_name_sort`;
   `fct_affordability` + `owner_households_count`, `pti_owner_rank_desc`; new check
   `assert_owner_income_weighted_median_vs_nl` (22 checks); notebook reads owner households from the mart and asserts
@@ -62,7 +62,7 @@ Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star
   Desktop and the DAX results (no Power BI outside the VM; loading Microsoft's TOM library here was not permitted).
 
 ## Next steps (towards the dashboard)
-1. Owner: review the stage 5 PR; on the Mac `make build` (22/22 + check-powerbi), share the repo with the VM, open
+1. Owner: on the Mac `make build` (22/22 + check-powerbi), share the repo with the VM, open
    `powerbi/nl_housing_affordability.pbip`, set `MartsFolder` if needed, refresh, compare the *Model checks* page with
    `powerbi/CHECKS.md` (both income bases). Report any TMDL/DAX error message in the PR. Commit Desktop's first save
    separately. Decide D-039.
