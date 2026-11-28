@@ -2,11 +2,12 @@
 
 [![CI](https://github.com/dimaash03/nl-housing-affordability/actions/workflows/ci.yml/badge.svg)](https://github.com/dimaash03/nl-housing-affordability/actions/workflows/ci.yml)
 
-> **Status (2026-11-28): data model and analysis complete, dashboard next.**
+> **Status (2026-11-28): data model and analysis complete, dashboard in progress.**
 > Done: ingestion from CBS, cleaning, harmonisation to the 2026 municipalities, the star schema
-> (`fct_affordability`, `fct_group_affordability`, three dimensions) with 21 automated data checks, and the analysis
-> notebook with three findings and their robustness checks ([Key insights](#key-insights)).
-> Next: the Power BI dashboard. Details: [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
+> (`fct_affordability`, `fct_group_affordability`, three dimensions) with 22 automated data checks, the analysis
+> notebook with three findings and their robustness checks ([Key insights](#key-insights)), and the Power BI
+> semantic model as code (PBIP / TMDL, 50 DAX measures). Next: the report pages in Power BI Desktop.
+> Details: [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
 | Stage | State |
 |---|---|
@@ -14,7 +15,7 @@
 | 2. Ingestion & staging (CBS OData → DuckDB) | done |
 | 3. Marts: star schema + group aggregates | done |
 | 4. Analysis notebook (findings, sensitivity checks) | done |
-| 5. Power BI dashboard | next |
+| 5. Power BI dashboard | in progress: model done, report pages next |
 | 6. Write-up (insights, limitations) | after 5 |
 
 How affordable is buying a home in the Netherlands, and how has that changed over the last decade?
@@ -100,13 +101,13 @@ nl-housing-affordability/
 ├── docs/              # data dictionary, decisions log, project status
 │   └── figures/       # charts saved by the analysis notebook
 ├── notebooks/         # 01_affordability_findings.ipynb: findings + robustness checks
-├── powerbi/           # .pbix file and dashboard notes
+├── powerbi/           # Power BI Project (.pbip): TMDL semantic model, PBIR report, control values
 ├── sql/
 │   ├── models.yaml    # execution order of the SQL models
 │   ├── staging/       # stg_* models: clean & rename raw CBS tables
 │   ├── marts/         # fct_* / dim_* models: the star schema
 │   └── tests/         # data tests: each query returns the rows that violate an expectation
-├── src/nl_housing/    # Python package: config, ingest, load_duckdb, harmonise, transform, check, export, geo
+├── src/nl_housing/    # Python package: config, ingest, load_duckdb, harmonise, transform, check, export, powerbi, geo
 ├── tests/             # offline unit tests (network is mocked)
 ├── Makefile
 ├── requirements.txt      # dependency lower bounds
@@ -139,10 +140,11 @@ The steps depend on each other in this order; `make check` needs the tables that
 | `make ingest` | internet | `data/raw/<table>/` for 7 CBS tables (~14 MB) | `failed=[]`; a few minutes (86380NED has ~325 000 rows) |
 | `make load` | `data/raw/`, `data/reference/municipality_mapping_2026.csv` (committed) | schemas `raw`, `reference` in `data/nl_housing.duckdb` | `Loaded 38 table(s)`, `Loaded 456 rows into reference.municipality_mapping_2026` |
 | `make transform` | `raw`, `reference`, `config/cbs_tables.yaml` (`project:`) | schemas `staging`, `marts` | `Built 12 model(s)`; `fct_affordability` 5 130 rows, `fct_group_affordability` 270 |
-| `make check` | built database | — | `21 check(s): 21 passed, 0 failed` |
+| `make check` | built database | — | `22 check(s): 22 passed, 0 failed` |
 | `make export` | `marts` | `data/processed/marts/*.parquet` (5 files, Power BI input) | 5 files |
+| `make check-powerbi` | Parquet files, `powerbi/*.SemanticModel` | — | `Power BI model: 7 tables, 50 measures, 4 relationships, 0 problem(s)` |
 | `make notebook` | built database | executed `notebooks/01_affordability_findings.ipynb`, `docs/figures/*.png`, `docs/KEY_FINDINGS.md`, README *Key insights* | no failing `assert`; on unchanged CBS data `git diff docs/KEY_FINDINGS.md README.md` is empty. Stop any open notebook kernel first, and stop it again before the next `make build` |
-| `make test` | — (no network) | — | with the geo extras (`make setup-geo`): `185 passed`; without them: `170 passed, 1 skipped` (the geo simplification module) |
+| `make test` | — (no network) | — | with the geo extras (`make setup-geo`): `210 passed`; without them: `195 passed, 1 skipped` (the geo simplification module) |
 
 CBS revises figures, so a later download can move numbers slightly; the checks are written as tolerances and
 rules, not as frozen values. If a check fails after a fresh download, its output lists the offending rows.
@@ -158,7 +160,8 @@ make load        # load data/raw/ into data/nl_housing.duckdb, schema `raw`
 make transform   # build the SQL models into schemas `staging` / `marts` (order: sql/models.yaml)
 make check       # run the SQL data tests in sql/tests/ against the database
 make export      # write the marts tables to data/processed/marts/*.parquet (Power BI input)
-make build       # load + transform + check + export (data already downloaded)
+make check-powerbi  # Power BI model (TMDL) vs the Parquet files + DAX reference lint
+make build       # load + transform + check + export + check-powerbi (data already downloaded)
 make reproduce   # ingest + build
 make notebook    # execute the analysis notebook in place (findings, figures, README key insights)
 make test        # run unit tests (no network needed)
@@ -275,8 +278,12 @@ result is named in the notebook's finding texts.
 
 ## Dashboard
 
-Planned (stage 5): Power BI report on the exported Parquet files — national KPIs, municipality map, G4 vs regions,
-municipality detail. Screenshots and a walkthrough will be added here.
+Stage 5, in progress. The Power BI semantic model is code: a Power BI Project ([powerbi/](powerbi/README.md)) with
+the model in TMDL — star schema on the Parquet export, 50 DAX measures, an income-basis switch (all households /
+owner-occupiers, D-038) — checked in CI against the marts (`make check-powerbi`) and with control values computed
+independently in SQL ([powerbi/CHECKS.md](powerbi/CHECKS.md)). Report pages (national KPIs, municipality map,
+G4 vs regions, municipality detail) are being built in Power BI Desktop; screenshots and a walkthrough will be
+added here.
 
 ## Limitations
 
