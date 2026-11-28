@@ -2,19 +2,20 @@
 
 [![CI](https://github.com/dimaash03/nl-housing-affordability/actions/workflows/ci.yml/badge.svg)](https://github.com/dimaash03/nl-housing-affordability/actions/workflows/ci.yml)
 
-> **Status (2026-11-27): data model complete, analysis and dashboard in progress.**
-> Done: ingestion from CBS, cleaning, harmonisation to the 2026 municipalities, and the star schema
-> (`fct_affordability`, `fct_group_affordability`, three dimensions) with 21 automated data checks.
-> Next: short analysis notebook with findings, then the Power BI dashboard. Details: [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
+> **Status (2026-11-28): data model and analysis complete, dashboard next.**
+> Done: ingestion from CBS, cleaning, harmonisation to the 2026 municipalities, the star schema
+> (`fct_affordability`, `fct_group_affordability`, three dimensions) with 21 automated data checks, and the analysis
+> notebook with three findings and 32 robustness checks ([Key insights](#key-insights)).
+> Next: the Power BI dashboard. Details: [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
 | Stage | State |
 |---|---|
 | 1. Scoping, data sourcing, metric definitions | done |
 | 2. Ingestion & staging (CBS OData → DuckDB) | done |
 | 3. Marts: star schema + group aggregates | done |
-| 4. Analysis notebook (findings, sensitivity checks) | next |
+| 4. Analysis notebook (findings, sensitivity checks) | done |
 | 5. Power BI dashboard | next |
-| 6. Write-up (insights, limitations) | after 4–5 |
+| 6. Write-up (insights, limitations) | after 5 |
 
 How affordable is buying a home in the Netherlands, and how has that changed over the last decade?
 This project relates average house prices to household income for every Dutch municipality (*gemeente*)
@@ -97,7 +98,8 @@ nl-housing-affordability/
 │   ├── raw/           # CBS downloads, one folder per table (gitignored)
 │   └── processed/     # exported marts for Power BI (gitignored)
 ├── docs/              # data dictionary, decisions log, project status
-├── notebooks/         # EDA and analysis
+│   └── figures/       # charts saved by the analysis notebook
+├── notebooks/         # 01_affordability_findings.ipynb: findings + robustness checks
 ├── powerbi/           # .pbix file and dashboard notes
 ├── sql/
 │   ├── models.yaml    # execution order of the SQL models
@@ -205,8 +207,28 @@ safely and a failing model leaves the previous tables untouched.
 
 ## Key insights
 
-Written after the analysis notebook (stage 4); no conclusions are published before they are checked.
-The first computed outputs of the group table (`marts.fct_group_affordability`; * = preliminary income):
+From [`notebooks/01_affordability_findings.ipynb`](notebooks/01_affordability_findings.ipynb) (build of 2026-11-28).
+Every number below is computed there; each finding was re-checked with owner-occupier income, the preliminary 2025
+data, real values, the quality-adjusted CBS price index and rank-stability tests — **32 checks: 27 hold, 4 weaker,
+1 reverses** (matrix in section 4 of the notebook). PTI = average sale price ÷ median disposable household income;
+* = preliminary income.
+
+![PTI by region group](docs/figures/01_pti_by_group.png)
+
+1. **Homes became less affordable everywhere, most of all in the G4, but the G4's lead peaked in 2019.**
+   The national PTI rose from 7.5 (2011) to 9.2 (2024), +24 %, after a peak of 10.0 in 2022. The G4 rose most
+   (9.4 → 12.1, +29 %); relative to the rest of NL it went from 1.31× to 1.39×, below its 2019 peak of 1.55×.
+   With owner-occupier income the G4's lead shrinks to 1.11×: most of the gap reflects *who lives* in the cities
+   (many renters and one-person households), not only what homes cost.
+2. **The least affordable places are wealthy suburbs, not the G4 — and the map hardly changes.**
+   22 of the 25 least affordable municipalities in 2024 lie in the Randstad provinces outside the G4 (top 3: Laren,
+   Blaricum, Bloemendaal); Amsterdam (rank 5) is the only G4 city in the top 10. The 2011 and 2024 rankings
+   correlate at 0.85. Ranked by owner-occupier income, three of the four G4 cities leave the least-affordable third
+   (Rotterdam: rank 40 → 234).
+3. **Prices outgrew incomes in 97 % of municipalities.** In the G4 prices rose 108 % against incomes 62 % (after
+   inflation: +50 % vs +16 %); in the rest of NL +84 % vs +51 %, with real incomes up only 9 % in 13 years.
+   The G4 pulled ahead in 2013–2019 (+68 % vs +41 %), the rest caught up in 2019–2022, and after 2022 G4 prices stood
+   still in euros (+0.6 %, a real fall of 6 %) while incomes rose 14 %.
 
 | Group | PTI 2011 | PTI 2024 | PTI 2025* | Price growth minus income growth 2011–2024 (pp) |
 |---|---:|---:|---:|---:|
@@ -215,8 +237,8 @@ The first computed outputs of the group table (`marts.fct_group_affordability`; 
 | Rest of Randstad provinces | 7.58 | 9.22 | 9.46 | 32.7 |
 | Rest of NL | 6.86 | 8.39 | 8.65 | 33.5 |
 
-PTI = average sale price of existing homes ÷ median disposable household income. It mixes a mean with a median, so
-compare levels between groups and changes over time, not against a "rule-of-thumb" threshold (see Limitations).
+PTI mixes a mean with a median, so compare groups and changes over time, not against a "rule-of-thumb" threshold
+(see Limitations).
 
 ## Dashboard
 
@@ -225,13 +247,16 @@ municipality detail. Screenshots and a walkthrough will be added here.
 
 ## Limitations
 
-Known from the data design (each one has a decision in [docs/DECISIONS_LOG.md](docs/DECISIONS_LOG.md));
-the analysis notebook will add sensitivity checks for them.
+Each one has a decision in [docs/DECISIONS_LOG.md](docs/DECISIONS_LOG.md); section 5 of the notebook explains
+them in plain language, with their measured size where possible.
 
 - **PTI mixes a mean price with a median income** (D-004): CBS publishes no median sale price per municipality.
   Ratios are best read relative to each other and over time.
-- **Price is not quality-adjusted:** the average reflects what was sold that year (size, type, location).
-- **Income of all households**, renters included (D-003); owner-occupier income is the planned sensitivity.
+- **Price is not quality-adjusted:** the average reflects what was sold that year (size, type, location). Nationally
+  this "mix effect" adds about 6 pp to price growth 2011–2024 (CBS quality-adjusted index 85792NED, notebook 3B).
+- **Income of all households**, renters included (D-003); the owner-occupier sensitivity changes the G4 picture
+  (findings 1–2).
+- **No financing costs:** the PTI ignores mortgage rates; rate scenarios are business question 4 (D-013).
 - **Nominal values** in the PTI (price and income share the deflator); real values in 2025 euro are available for growth.
 - **Municipal reorganisations:** prices of merged municipalities are rebuilt on the 2026 map with owner-occupied-stock
   weights (D-007); 311 of 5 130 rows are harmonised. Group prices use each year's boundaries, so Weesp counts
