@@ -44,7 +44,7 @@ Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star
   `make notebook`; notebook closes its DuckDB connection; CI `pipeline` job runs the notebook. D-033 / D-036 updated,
   D-038 proposed (income basis on the dashboard). Verified: `make clean-data && make reproduce && make notebook`
   → 21/21 checks, notebook runs, `docs/KEY_FINDINGS.md` byte-identical; two consecutive runs give a byte-identical
-  notebook; lint clean; 167 tests.
+  notebook; lint clean; 170 tests (CI pipeline job also compares every text output of the re-executed notebook).
 
 ## Next steps (towards the dashboard)
 1. Owner reviews the EDA follow-up PR, decides D-038 (dashboard default income basis; owner-occupier group income

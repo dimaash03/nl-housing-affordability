@@ -142,7 +142,7 @@ The steps depend on each other in this order; `make check` needs the tables that
 | `make check` | built database | — | `21 check(s): 21 passed, 0 failed` |
 | `make export` | `marts` | `data/processed/marts/*.parquet` (5 files, Power BI input) | 5 files |
 | `make notebook` | built database | executed `notebooks/01_affordability_findings.ipynb`, `docs/figures/*.png`, `docs/KEY_FINDINGS.md`, README *Key insights* | no failing `assert`; on unchanged CBS data `git diff docs/KEY_FINDINGS.md README.md` is empty. Stop any open notebook kernel first, and stop it again before the next `make build` |
-| `make test` | — (no network) | — | with the geo extras (`make setup-geo`): `182 passed`; without them: `167 passed, 1 skipped` (the geo simplification module) |
+| `make test` | — (no network) | — | with the geo extras (`make setup-geo`): `185 passed`; without them: `170 passed, 1 skipped` (the geo simplification module) |
 
 CBS revises figures, so a later download can move numbers slightly; the checks are written as tolerances and
 rules, not as frozen values. If a check fails after a fresh download, its output lists the offending rows.

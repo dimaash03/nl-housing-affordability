@@ -7,12 +7,19 @@ The notebook renders its key findings from computed numbers and calls :func:`wri
 
 Nothing else in the README is touched. ``tests/test_report.py`` fails when the README block and
 ``docs/KEY_FINDINGS.md`` differ (someone edited the README by hand), and the CI ``pipeline`` job re-runs the
-notebook on fresh CBS data and fails when either file changes (a CBS revision changed a number).
+notebook on fresh CBS data and fails when either file changes (a CBS revision changed a number). The same job
+compares every text output of the re-executed notebook with the committed one (:func:`text_outputs`; images are
+ignored because PNG bytes depend on the font renderer)::
+
+    python -m nl_housing.report --compare-notebook committed.ipynb executed.ipynb
 """
 
 from __future__ import annotations
 
+import argparse
+import json
 import logging
+import sys
 from pathlib import Path
 
 from nl_housing import config
@@ -80,3 +87,59 @@ def write_key_findings(block: str, root: Path = config.REPO_ROOT) -> bool:
 
     logger.info("Key findings %s", "updated" if changed else "unchanged")
     return changed
+
+
+def text_outputs(notebook: Path) -> list[str]:
+    """Every non-image output of a notebook (stream text, Markdown, HTML, plain text), in cell order.
+
+    Images (``image/png``) and the ``<Figure ...>`` placeholder that accompanies them are left out, so two runs on
+    the same data compare equal on any platform.
+    """
+    nb = json.loads(notebook.read_text(encoding="utf-8"))
+    outputs: list[str] = []
+    for cell in nb.get("cells", []):
+        for out in cell.get("outputs", []):
+            if out.get("output_type") == "stream":
+                outputs.append("".join(out.get("text", [])))
+                continue
+            data = {k: v for k, v in out.get("data", {}).items() if k != "image/png"}
+            if "image/png" in out.get("data", {}):
+                data.pop("text/plain", None)
+            for mime in sorted(data):
+                value = data[mime]
+                outputs.append(f"{mime}: " + ("".join(value) if isinstance(value, list) else str(value)))
+    return outputs
+
+
+def compare_notebooks(committed: Path, executed: Path) -> list[int]:
+    """Indexes of text outputs that differ (or a length mismatch as the last index); empty = identical."""
+    a, b = text_outputs(committed), text_outputs(executed)
+    diff = [i for i, (x, y) in enumerate(zip(a, b, strict=False)) if x != y]
+    if len(a) != len(b):
+        diff.append(min(len(a), len(b)))
+    return diff
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--compare-notebook", nargs=2, metavar=("COMMITTED", "EXECUTED"), type=Path, required=True)
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    committed, executed = args.compare_notebook
+    diff = compare_notebooks(committed, executed)
+    if diff:
+        a, b = text_outputs(committed), text_outputs(executed)
+        for i in diff[:5]:
+            logger.error(
+                "Text output %d differs:\n--- committed\n%s\n+++ executed\n%s",
+                i,
+                a[i] if i < len(a) else "<missing>",
+                b[i] if i < len(b) else "<missing>",
+            )
+        return 1
+    logger.info("All %d text outputs identical (images not compared)", len(text_outputs(executed)))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from nl_housing import config, report
@@ -63,3 +65,33 @@ def test_committed_readme_block_matches_generated_file():
     assert report.extract_block(readme) == generated.strip("\n"), (
         "README key-findings block differs from docs/KEY_FINDINGS.md: re-run the notebook (make notebook)"
     )
+
+
+def _notebook(tmp_path, name, outputs):
+    path = tmp_path / name
+    path.write_text(json.dumps({"cells": [{"cell_type": "code", "outputs": outputs}]}), encoding="utf-8")
+    return path
+
+
+def test_compare_notebooks_ignores_images_only(tmp_path):
+    fig_a = {"output_type": "display_data", "data": {"image/png": "AAA", "text/plain": "<Figure size 1x1>"}}
+    fig_b = {"output_type": "display_data", "data": {"image/png": "BBB", "text/plain": "<Figure size 1x1>"}}
+    text = {"output_type": "stream", "name": "stdout", "text": ["PTI 9.24\n"]}
+    a = _notebook(tmp_path, "a.ipynb", [fig_a, text])
+    b = _notebook(tmp_path, "b.ipynb", [fig_b, text])
+    assert report.compare_notebooks(a, b) == []
+    assert report.main(["--compare-notebook", str(a), str(b)]) == 0
+
+
+def test_compare_notebooks_flags_a_changed_number(tmp_path):
+    a = _notebook(tmp_path, "a.ipynb", [{"output_type": "stream", "name": "stdout", "text": ["PTI 9.24\n"]}])
+    b = _notebook(tmp_path, "b.ipynb", [{"output_type": "stream", "name": "stdout", "text": ["PTI 9.31\n"]}])
+    assert report.compare_notebooks(a, b) == [0]
+    assert report.main(["--compare-notebook", str(a), str(b)]) == 1
+
+
+def test_compare_notebooks_flags_missing_output(tmp_path):
+    out = {"output_type": "execute_result", "data": {"text/markdown": "Finding 1"}}
+    a = _notebook(tmp_path, "a.ipynb", [out, out])
+    b = _notebook(tmp_path, "b.ipynb", [out])
+    assert report.compare_notebooks(a, b) == [1]

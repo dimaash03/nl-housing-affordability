@@ -71,7 +71,11 @@ jobs:
       - run: make setup-locked
       - run: make reproduce
       - name: Run the analysis notebook (asserts guard every finding)
-        run: make notebook
+        run: |
+          git show HEAD:notebooks/01_affordability_findings.ipynb > "$RUNNER_TEMP/committed.ipynb"
+          make notebook
+      - name: Every text output of the notebook must match the committed one (images excluded)
+        run: .venv/bin/python -m nl_housing.report --compare-notebook "$RUNNER_TEMP/committed.ipynb" notebooks/01_affordability_findings.ipynb
       - name: Generated key findings must match the committed ones
         run: |
           git status --short
@@ -93,6 +97,6 @@ jobs:
           .venv/bin/python - <<'EOF'
           import duckdb, pathlib
           for p in sorted(pathlib.Path("data/processed/marts").glob("*.parquet")):
-              n = duckdb.sql(f"select count(*) from '{p}'").fetchone()[0]
+              n = duckdb.sql(f"select count(*) from '{p}'").fetchall()[0][0]  # DuckDB 2.x relations have no fetchone()
               print(f"{p.name:35s} {n:6d}")
           EOF
