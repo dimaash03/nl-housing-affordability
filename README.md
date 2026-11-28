@@ -138,7 +138,7 @@ The steps depend on each other in this order; `make check` needs the tables that
 | `make transform` | `raw`, `reference`, `config/cbs_tables.yaml` (`project:`) | schemas `staging`, `marts` | `Built 12 model(s)`; `fct_affordability` 5 130 rows, `fct_group_affordability` 270 |
 | `make check` | built database | — | `21 check(s): 21 passed, 0 failed` |
 | `make export` | `marts` | `data/processed/marts/*.parquet` (5 files, Power BI input) | 5 files |
-| `make test` | — (no network) | — | `174 passed`; with the geo extras installed, nothing skipped |
+| `make test` | — (no network) | — | with the geo extras (`make setup-geo`): `174 passed`; without them: `159 passed, 1 skipped` (the geo simplification module) |
 
 CBS revises figures, so a later download can move numbers slightly; the checks are written as tolerances and
 rules, not as frozen values. If a check fails after a fresh download, its output lists the offending rows.
