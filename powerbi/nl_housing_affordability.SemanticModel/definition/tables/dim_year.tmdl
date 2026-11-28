@@ -1,0 +1,101 @@
+/// Analysis years 2011-2025; year_label has a * for preliminary income (D-030).
+table dim_year
+	lineageTag: 90d8ef16-2513-5ab5-9962-4305089325cd
+
+	column year
+		dataType: int64
+		formatString: 0
+		lineageTag: 0f563b25-2505-5290-8fd4-69a93f144635
+		summarizeBy: none
+		sourceColumn: year
+
+		annotation SummarizationSetBy = User
+
+	/// Year as text; 2025* = preliminary income.
+	column year_label
+		dataType: string
+		lineageTag: 7ee4dfe0-6811-5cab-a2b4-907344810b3e
+		summarizeBy: none
+		sourceColumn: year_label
+		sortByColumn: year
+
+		annotation SummarizationSetBy = User
+
+	/// Income is preliminary (CBS period status), currently 2025.
+	column is_preliminary
+		dataType: boolean
+		lineageTag: 1067d018-a4ca-5da3-935c-e1338f8e48e7
+		summarizeBy: none
+		sourceColumn: is_preliminary
+
+		annotation SummarizationSetBy = User
+
+	column has_price_data
+		dataType: boolean
+		lineageTag: 5d06f21f-ddfd-5026-826c-5ccfa36959ec
+		summarizeBy: none
+		sourceColumn: has_price_data
+
+		annotation SummarizationSetBy = User
+
+	column has_income_data
+		dataType: boolean
+		lineageTag: c90966e8-5133-5746-8790-aaff64a71903
+		summarizeBy: none
+		sourceColumn: has_income_data
+
+		annotation SummarizationSetBy = User
+
+	column has_pti_data
+		dataType: boolean
+		lineageTag: 23622968-1dec-578e-a0cc-920aa6d18277
+		summarizeBy: none
+		sourceColumn: has_pti_data
+
+		annotation SummarizationSetBy = User
+
+	column municipalities_with_pti
+		dataType: int64
+		formatString: #,0
+		lineageTag: e66da5c7-ba6a-5cce-a58e-752a62ca6390
+		summarizeBy: none
+		sourceColumn: municipalities_with_pti
+
+		annotation SummarizationSetBy = User
+
+	column years_since_base
+		dataType: int64
+		formatString: 0
+		lineageTag: 3e26166d-0dc9-5b63-bf13-a0bf9b4bb431
+		summarizeBy: none
+		sourceColumn: years_since_base
+
+		annotation SummarizationSetBy = User
+
+	column is_latest_data_year
+		dataType: boolean
+		lineageTag: 6d2dc2ad-1c67-561f-b536-112d28b78bd2
+		summarizeBy: none
+		sourceColumn: is_latest_data_year
+
+		annotation SummarizationSetBy = User
+
+	/// Latest year with final income: the default (headline) year of the dashboard.
+	column is_latest_final_year
+		dataType: boolean
+		lineageTag: 5064ae85-cb32-59c3-ae24-ae12f68a49f4
+		summarizeBy: none
+		sourceColumn: is_latest_final_year
+
+		annotation SummarizationSetBy = User
+
+	partition dim_year = m
+		mode: import
+		source =
+				let
+				    Folder = Text.TrimEnd(MartsFolder, {"\", "/"}),
+				    Source = Parquet.Document(File.Contents(Folder & "\dim_year.parquet"))
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

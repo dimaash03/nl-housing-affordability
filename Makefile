@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV   := .venv
 BIN    := $(VENV)/bin
 
-.PHONY: setup setup-locked lock ingest load transform check export build reproduce notebook test lint format clean-data help
+.PHONY: setup setup-locked lock ingest load transform check export check-powerbi build reproduce notebook test lint format clean-data help
 
 # Extra pytest arguments, e.g. in a sandbox that blocks local sockets:  make test PYTEST_ARGS='-m "not loopback"'
 PYTEST_ARGS ?=
@@ -54,11 +54,15 @@ check:  ## Run the SQL data tests (sql/tests/*.sql) against the built database
 export:  ## Export the marts tables to data/processed/marts/*.parquet (for Power BI)
 	$(BIN)/python -m nl_housing.export
 
-build:  ## load -> transform -> check -> export (data/raw/ must already be downloaded)
+check-powerbi:  ## Check the Power BI model (TMDL) against the exported Parquet files and lint its DAX references
+	$(BIN)/python -m nl_housing.powerbi check
+
+build:  ## load -> transform -> check -> export -> check-powerbi (data/raw/ must already be downloaded)
 	$(MAKE) load
 	$(MAKE) transform
 	$(MAKE) check
 	$(MAKE) export
+	$(MAKE) check-powerbi
 
 reproduce:  ## Full run from an empty data/ folder: ingest + build (needs internet for CBS)
 	$(MAKE) ingest

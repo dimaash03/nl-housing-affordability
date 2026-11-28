@@ -1,0 +1,56 @@
+/// The 12 provinces; is_randstad_province marks Utrecht, Noord-Holland and Zuid-Holland.
+table dim_province
+	lineageTag: 55461d53-b17a-5215-aaa7-76f64fc77f80
+
+	column province_code
+		dataType: string
+		lineageTag: 56b14417-88f6-506a-a412-2d9aab6d0be8
+		summarizeBy: none
+		sourceColumn: province_code
+
+		annotation SummarizationSetBy = User
+
+	column province_name
+		dataType: string
+		lineageTag: e01e6859-7c90-5960-8adb-159fa9bab582
+		summarizeBy: none
+		sourceColumn: province_name
+
+		annotation SummarizationSetBy = User
+
+	column is_randstad_province
+		dataType: boolean
+		lineageTag: 7804de42-2616-50e0-afa3-318778181540
+		summarizeBy: none
+		sourceColumn: is_randstad_province
+
+		annotation SummarizationSetBy = User
+
+	column municipality_count_2026
+		dataType: int64
+		formatString: #,0
+		lineageTag: 25ae4920-5745-5857-a16f-3f592579e773
+		summarizeBy: none
+		sourceColumn: municipality_count_2026
+
+		annotation SummarizationSetBy = User
+
+	column population_2026
+		dataType: double
+		formatString: #,0
+		lineageTag: e2eee0ad-3984-5323-9fc1-6327d493e6a2
+		summarizeBy: none
+		sourceColumn: population_2026
+
+		annotation SummarizationSetBy = User
+
+	partition dim_province = m
+		mode: import
+		source =
+				let
+				    Folder = Text.TrimEnd(MartsFolder, {"\", "/"}),
+				    Source = Parquet.Document(File.Contents(Folder & "\dim_province.parquet"))
+				in
+				    Source
+
+	annotation PBI_ResultType = Table
