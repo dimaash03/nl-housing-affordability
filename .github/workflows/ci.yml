@@ -7,7 +7,8 @@
 # being skipped, and both run the loopback (local HTTP server) retry tests.
 #
 # The data pipeline itself needs CBS and is NOT part of PR CI (a CBS outage or revision must not
-# block a code review). Run it on demand: Actions -> CI -> "Run workflow" (job `pipeline`).
+# block a code review). Run it on demand: Actions -> CI -> "Run workflow" (job `pipeline`). It also executes the
+# analysis notebook and fails if fresh CBS data change the generated key findings (D-033).
 
 name: CI
 
@@ -57,7 +58,7 @@ jobs:
           if grep -q "SKIPPED" pytest.log; then echo "::error::tests were skipped"; exit 1; fi
 
   pipeline:
-    # Full reproduction from CBS: ingest -> load -> transform -> check -> export. Manual only.
+    # Full reproduction from CBS: ingest -> load -> transform -> check -> export -> notebook. Manual only.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -69,6 +70,24 @@ jobs:
           cache: pip
       - run: make setup-locked
       - run: make reproduce
+      - name: Run the analysis notebook (asserts guard every finding)
+        run: make notebook
+      - name: Generated key findings must match the committed ones
+        run: |
+          git status --short
+          if ! git diff --exit-code -- docs/KEY_FINDINGS.md README.md; then
+            echo "::error::Fresh CBS data changed the key findings: re-run 'make notebook' locally and commit the result"
+            exit 1
+          fi
+      - name: Upload the executed notebook and figures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: executed-notebook
+          path: |
+            notebooks/01_affordability_findings.ipynb
+            docs/figures/
+            docs/KEY_FINDINGS.md
       - name: Row counts of the exported marts
         run: |
           .venv/bin/python - <<'EOF'
