@@ -31,6 +31,13 @@ logger = logging.getLogger(__name__)
 
 TESTS_DIR_NAME = "tests"
 MAX_ROWS_SHOWN = 10
+#: Schemas the data tests read from; ``make transform`` creates staging / marts and the settings table.
+REQUIRED_SCHEMAS = ("raw", "reference", "staging", "marts")
+SETTINGS_TABLE = ("reference", "project_settings")
+
+
+class CheckSetupError(RuntimeError):
+    """The database is not ready for the data tests (a pipeline step has not been run yet)."""
 
 
 @dataclass
@@ -64,6 +71,26 @@ def run_check(con: duckdb.DuckDBPyConnection, path: Path) -> CheckResult:
     return CheckResult(name=path.stem, failing_rows=len(rows), columns=columns, sample=rows[:MAX_ROWS_SHOWN])
 
 
+def ensure_built(con: duckdb.DuckDBPyConnection) -> None:
+    """Fail fast with the missing pipeline step instead of one SQL error per test file.
+
+    Without this, running ``make check`` before ``make transform`` reports every test as an
+    ``ERROR ... Catalog Error: ... staging ...``, which hides the real cause.
+    """
+    schemas = {name for (name,) in con.execute("select schema_name from information_schema.schemata").fetchall()}
+    missing = [s for s in REQUIRED_SCHEMAS if s not in schemas]
+    if "raw" in missing or "reference" in missing:
+        raise CheckSetupError(f"Database has no schema(s) {missing}: run `make load transform` before `make check`")
+    if missing:
+        raise CheckSetupError(f"Database has no schema(s) {missing}: run `make transform` before `make check`")
+    found = con.execute(
+        "select count(*) from information_schema.tables where table_schema = ? and table_name = ?",
+        list(SETTINGS_TABLE),
+    ).fetchall()[0][0]  # fetchall: a half-read result would block the next query on this connection
+    if not found:
+        raise CheckSetupError("reference.project_settings is missing: run `make transform` before `make check`")
+
+
 def run(root: Path = config.REPO_ROOT, db_path: Path | None = None) -> list[CheckResult]:
     """Run every ``sql/tests/*.sql`` file (alphabetical order) against the database (read-only)."""
     db_path = db_path or config.duckdb_path(root)
@@ -71,6 +98,7 @@ def run(root: Path = config.REPO_ROOT, db_path: Path | None = None) -> list[Chec
         raise FileNotFoundError(f"DuckDB file not found: {db_path} - run `make load transform` first")
     paths = sorted(tests_dir(root).glob("*.sql"))
     with duckdb.connect(str(db_path), read_only=True) as con:
+        ensure_built(con)
         results = [run_check(con, path) for path in paths]
 
     for r in results:
@@ -93,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     try:
         results = run()
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, CheckSetupError) as exc:
         logger.error("%s", exc)
         return 1
     return 0 if results and all(r.passed for r in results) else 1

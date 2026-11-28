@@ -1,5 +1,5 @@
 -- Group aggregates (D-016, D-029). Returns one row per violation.
---   - grain: 18 groups x 15 years, unique on (group_type, group_code, year), no missing price / income
+--   - grain: 18 groups x n_years (15 for 2011-2025), unique on (group_type, group_code, year), no missing price / income
 --   - the residual formula needs 85792NED and 83625NED to agree on the NL and province averages
 --     (otherwise "NL minus G4" mixes two definitions); G4 cities may differ by a revision of < 0.1 %
 --   - residual groups must have positive transaction counts
@@ -17,7 +17,8 @@ consistency as (
            abs(i.avg_sale_price_eur / p.avg_sale_price_eur - 1) * 100 as diff_pct
     from staging.stg_cbs__house_price_index as i
     join staging.stg_cbs__house_prices as p using (region_code, year)
-    where i.year between 2011 and 2025
+    where i.year between (select year_from from reference.project_settings)
+                     and (select year_to from reference.project_settings)
 ),
 
 g as (
@@ -42,7 +43,8 @@ recombined as (
 ),
 
 issues as (
-    select 'row count <> 270' as issue, n_rows::varchar as detail from grain where n_rows <> 270
+    select 'row count <> 18 x n_years' as issue, n_rows::varchar as detail from grain
+    where n_rows <> 18 * (select year_to - year_from + 1 from reference.project_settings)
     union all
     select 'duplicate keys', (n_rows - n_keys)::varchar from grain where n_rows <> n_keys
     union all

@@ -29,7 +29,19 @@ def project(tmp_path: Path) -> Path:
     (sql / "staging" / "stg_b.sql").write_text("select code, v * 10 as v10 from staging.stg_a -- trailing comment")
     (sql / "marts" / "dim_x.sql").write_text("select code from staging.stg_b where code like 'GM%'")
     (sql / "models.yaml").write_text("staging:\n  - stg_a\n  - stg_b\nmarts:\n  - dim_x\n")
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "cbs_tables.yaml").write_text(PROJECT_CONFIG)
     return tmp_path
+
+
+PROJECT_CONFIG = """
+project:
+  analysis_years: [2011, 2013]
+  randstad_g4: [GM0363, GM0599]
+  randstad_provinces: [PV27]
+  low_reliability_max_households: 5000
+tables: []
+"""
 
 
 def _query(root: Path, sql: str) -> list[tuple]:
@@ -135,3 +147,29 @@ def test_drop_of_stale_tables_is_rolled_back_on_failure(project: Path):
     with pytest.raises(duckdb.Error):
         transform.run(root=project)
     assert _query(project, "select count(*) from marts.dim_x") == [(1,)]
+
+
+def test_project_settings_are_written_before_the_models(project: Path):
+    """Models read the analysis window from reference.project_settings (config = single source of truth)."""
+    (project / "sql" / "marts" / "dim_x.sql").write_text(
+        "select unnest(range(year_from, year_to + 1)) as year, g4_codes from reference.project_settings"
+    )
+    transform.run(root=project)
+    assert _query(project, "select year from marts.dim_x order by year") == [(2011,), (2012,), (2013,)]
+    assert _query(project, "select base_year, g4_codes, randstad_province_codes from reference.project_settings") == [
+        (2011, ["GM0363", "GM0599"], ["PV27"])
+    ]
+
+
+def test_config_change_takes_effect_on_next_run(project: Path):
+    transform.run(root=project)
+    (project / "config" / "cbs_tables.yaml").write_text(PROJECT_CONFIG.replace("[2011, 2013]", "[2012, 2020]"))
+    transform.run(root=project)
+    assert _query(project, "select year_from, year_to from reference.project_settings") == [(2012, 2020)]
+
+
+def test_missing_project_section_fails_before_any_model(project: Path):
+    (project / "config" / "cbs_tables.yaml").write_text("tables: []\n")
+    with pytest.raises(config.ConfigError, match="project"):
+        transform.run(root=project)
+    assert _query(project, "select count(*) from duckdb_tables() where schema_name = 'staging'") == [(0,)]

@@ -13,6 +13,13 @@
 #   catalog     (optional, default opendata.cbs.nl)
 # =============================================================================
 
+# Same analysis parameters as config/cbs_tables.yaml (read by nl_housing.transform).
+project:
+  analysis_years: [2011, 2025]
+  randstad_g4: [GM0363, GM0599, GM0518, GM0344]
+  randstad_provinces: [PV26, PV27, PV28]
+  low_reliability_max_households: 5000
+
 tables:
   # EXAMPLE ENTRY - small national table (~540 rows), chosen because it is quick
   # to download. It is NOT necessarily part of the final analysis.

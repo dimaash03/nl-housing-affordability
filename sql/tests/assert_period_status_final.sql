@@ -21,6 +21,7 @@ yearly as (
 
 select table_id, year, period_status
 from yearly
-where year >= 2011
+where year between (select year_from from reference.project_settings)
+               and (select year_to from reference.project_settings)
   and (period_status is null or period_status <> 'Definitief')
 order by table_id, year

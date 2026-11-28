@@ -4,11 +4,13 @@
 --          staging.stg_cbs__household_income      (86380NED, already in the 2026 division)
 --          staging.stg_cbs__cpi                   (86141NED, yearly CPI 2025 = 100)
 --          staging.stg_cbs__municipalities_2026   (86247NED, the 342 municipalities of 1 January 2026)
+--          reference.project_settings             (config/cbs_tables.yaml `project:`: analysis window,
+--                                                   base year, low-reliability threshold)
 --          reference.municipality_mapping_2026     (historical GM code -> 2026 code; committed CSV,
 --                                                   loaded by `make load`, PR #4)
 -- Grain:   one row per municipality_code (2026 division) x year, 2011-2025 -> 342 x 15 = 5 130 rows.
--- Filters: GM rows only, pseudo-municipalities GM0998/GM0999 excluded (D-023, proposed);
---          analysis window 2011-2025 (D-008).
+-- Filters: GM rows only, pseudo-municipalities GM0998/GM0999 excluded (D-023);
+--          analysis window year_from..year_to from reference.project_settings (2011-2025, D-008).
 -- Decisions:
 --   D-003  income = median disposable household income, private households excl. students;
 --          owner-occupier income is the mandatory sensitivity (second PTI).
@@ -23,6 +25,12 @@
 -- (D-016: group PTI must be built from group price and group income, not from these ratios).
 
 with
+
+-- 0. Analysis parameters (one row, written by nl_housing.transform from config/cbs_tables.yaml).
+settings as (
+    select year_from, year_to, base_year, low_reliability_max_households
+    from reference.project_settings
+),
 
 -- 1. Historical -> 2026 code mapping (456 rows; weights sum to 1 per old_code). Coverage of every
 --    priced code is enforced by sql/tests/assert_mapping_covers_staging.sql, so the inner join in
@@ -48,9 +56,10 @@ prices_raw as (
     left join staging.stg_cbs__regional_key_figures as k
         on  k.region_code = p.region_code
         and k.year = p.year
+    cross join settings as st
     where p.region_type = 'GM'
       and p.region_code not in ('GM0998', 'GM0999')   -- pseudo-municipalities (D-023)
-      and p.year between 2011 and 2025
+      and p.year between st.year_from and st.year_to
       and p.avg_sale_price_eur is not null
 ),
 
@@ -132,13 +141,18 @@ cpi as (
 
 -- 6. Spine = every 2026 municipality x every analysis year, then LEFT JOIN each source. This fixes the
 --    grain at 342 x 15 independent of gaps: a missing price or income becomes a NULL (visible, flagged),
---    never a lost row. Years mirror config/cbs_tables.yaml `analysis_years: [2011, 2025]`.
+--    never a lost row. Years come from config/cbs_tables.yaml `analysis_years` (reference.project_settings).
+years as (
+    select unnest(range(year_from, year_to + 1))::integer as year
+    from settings
+),
+
 spine as (
     select
         mun.municipality_code,
         yr.year
     from staging.stg_cbs__municipalities_2026 as mun
-    cross join (select unnest(range(2011, 2026))::integer as year) as yr
+    cross join years as yr
 ),
 
 joined as (
@@ -171,12 +185,13 @@ metrics as (
         median_disposable_income_eur * 100 / cpi_2025_index      as real_median_disposable_income_eur_2025,
         -- Real values in 2025 euro. PTI needs no real variant: price and income share the deflator.
         -- Real growth rates are derived from these columns in the analysis layer / DAX (owner decision 2026-11-26).
-        -- growth vs the same municipality's 2011 value (nominal; CPI cancels out of the gap's sign)
+        -- growth vs the same municipality's base-year value (nominal; CPI cancels out of the gap's sign).
+        -- The column names keep "2011" (D-017); the base year is settings.base_year = first analysis year.
         (avg_sale_price_eur
-            / max(case when year = 2011 then avg_sale_price_eur end)
+            / max(case when year = (select base_year from settings) then avg_sale_price_eur end)
                   over (partition by municipality_code) - 1) * 100            as price_growth_since_2011_pct,
         (median_disposable_income_eur
-            / max(case when year = 2011 then median_disposable_income_eur end)
+            / max(case when year = (select base_year from settings) then median_disposable_income_eur end)
                   over (partition by municipality_code) - 1) * 100            as income_growth_since_2011_pct
     from joined
 ),
@@ -186,7 +201,8 @@ flags as (
     select
         *,
         price_growth_since_2011_pct - income_growth_since_2011_pct  as growth_gap_pp,
-        coalesce(households_count < 5000, false)                    as low_reliability,
+        coalesce(households_count < (select low_reliability_max_households from settings), false)
+                                                                    as low_reliability,
         median_disposable_income_eur is null                        as income_missing
     from metrics
 ),

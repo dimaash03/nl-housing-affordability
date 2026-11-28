@@ -15,10 +15,36 @@ def project(tmp_path: Path) -> Path:
     db = config.duckdb_path(tmp_path)
     db.parent.mkdir(parents=True)
     with duckdb.connect(str(db)) as con:
-        con.execute("CREATE SCHEMA staging")
+        for schema in check.REQUIRED_SCHEMAS:
+            con.execute(f"CREATE SCHEMA {schema}")
+        con.execute("CREATE TABLE reference.project_settings AS SELECT 2011 AS year_from")
         con.execute("CREATE TABLE staging.t AS SELECT * FROM (VALUES ('GM1', 1), ('GM1', 2), ('GM2', -5)) v(code, x)")
     (tmp_path / "sql" / "tests").mkdir(parents=True)
     return tmp_path
+
+
+@pytest.mark.parametrize(
+    ("drop", "hint"),
+    [
+        ("DROP SCHEMA staging CASCADE", "run `make transform`"),
+        ("DROP SCHEMA raw CASCADE", "run `make load transform`"),
+        ("DROP TABLE reference.project_settings", "reference.project_settings is missing"),
+    ],
+)
+def test_unbuilt_database_names_the_missing_step(project: Path, drop: str, hint: str):
+    _write(project, "assert_anything", "select * from staging.t where x < 0")
+    with duckdb.connect(str(config.duckdb_path(project))) as con:
+        con.execute(drop)
+    with pytest.raises(check.CheckSetupError, match=hint):
+        check.run(root=project)
+
+
+def test_main_returns_1_on_unbuilt_database(monkeypatch: pytest.MonkeyPatch):
+    def not_built() -> list[check.CheckResult]:
+        raise check.CheckSetupError("run `make transform` before `make check`")
+
+    monkeypatch.setattr(check, "run", not_built)
+    assert check.main([]) == 1
 
 
 def _write(root: Path, name: str, sql: str) -> None:

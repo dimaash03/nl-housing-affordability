@@ -150,7 +150,8 @@ All amounts in euro after unit conversion. `y` = year, `m` = municipality (2026 
 | Rest of Randstad provinces | `(sum_PV26-28 p * n - sum_g p_g * n_g) / (sum n - sum n_g)` — exact (D-029) | household-weighted mean of medians *(approx.)* |
 
 Built in `marts.fct_group_affordability` (group_type × group_code × year, 270 rows); `price_method` / `income_method`
-say which rule produced each value. Prices come from `85792NED` in the boundaries of each year, so the G4 price excludes
+say which rule produced each value, and `is_income_approximated = true` marks every row whose income is the
+household-weighted mean of municipal medians (G4 and the Rest groups: 75 of 270 rows) rather than a published CBS median. Prices come from `85792NED` in the boundaries of each year, so the G4 price excludes
 Weesp before 2022 (limitation; group incomes use the 2026 division).
 
 Never average municipal ratios unweighted for a headline figure. Validation: the household-weighted mean of medians over all 342 municipalities must stay within 2 % of the official NL median for every year (2011: +0.57 %, 2024: +0.80 %).
@@ -173,6 +174,19 @@ Parameters live in one config file (planned: `config/scenarios.yaml`) and are pr
 | `is_harmonised` | The price was built from more than one source row (historical code) in that year, including the 2015 GM1921/GM1940 rename pair (D-026). 311 of 5 130 rows. |
 | `low_reliability` | Fewer than 5 000 households (`ParticuliereHuishoudens_1 < 5`); 19 municipalities in 2024. |
 | `income_missing` | Income suppressed (`null`); in 2025: GM0088 Schiermonnikoog, GM0096 Vlieland, GM0277 Rozendaal. |
+
+### `dim_year` flags (D-030)
+
+| Column | Rule |
+|---|---|
+| `has_price_data` / `has_income_data` / `has_pti_data` | at least one municipality in `fct_affordability` has that value in the year |
+| `municipalities_with_pti` | number of municipalities with a PTI (2025: 339, the three `income_missing` ones excluded) |
+| `is_latest_data_year` | last year with `has_pti_data` (replaces `is_latest_year`, which was simply the last year of the configured window) |
+| `is_latest_final_year` | last year with `has_pti_data` whose income is final (currently 2024) |
+
+The analysis window, the base year of every growth column (first year of the window), the G4 list, the
+Randstad provinces and the low-reliability threshold are set once in `config/cbs_tables.yaml` (`project:`) and
+read by the SQL from `reference.project_settings` (D-031).
 
 ## 4. Harmonisation to 2026 boundaries (approved, D-007)
 
