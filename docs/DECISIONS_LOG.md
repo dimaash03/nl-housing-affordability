@@ -197,3 +197,33 @@ different decisions (stage-2 QA H-2); #2 keeps D-018…D-021 and the proposals o
 - **Rationale:** On Python 3.10 pip resolves DuckDB 1.5.6 (DuckDB 2.x ships no 3.10 wheels), and DuckDB 1.x cannot plan `fct_affordability` ("Not implemented Error: Cannot perform non-inner join on subquery"); the README promised 3.10+. Verified 2026-11-27: Python 3.11 with the newest versions allowed by `requirements.txt` runs the full build (12 models, 21/21 checks) and all 174 unit tests; CI runs that combination on every PR.
 - **Alternatives:** rewrite the correlated `exists` in `fct_affordability` for DuckDB 1.x (keeps 3.10, but pins the project to an old engine).
 - **Status:** proposed (PR: review follow-ups 2026-11-27).
+
+## D-033 — Findings are rendered from code and guarded by asserts
+- **Decision:** In `notebooks/01_affordability_findings.ipynb` every finding is a code cell that renders Markdown from the computed numbers (f-strings). The words that carry a claim ("rose", "widest", "only", "mostly", "holds") are guarded by `assert`s placed directly above the text. The notebook is committed **with** outputs so GitHub shows the findings and charts.
+- **Rationale:** Typed-in numbers go stale silently after a CBS revision or a model change; an assert makes the notebook stop instead of printing a false sentence. During development this caught one wrong sentence (the G4 growth lead was described as holding in the preliminary year; it halves). Committed outputs make the notebook readable for a reviewer who does not run it.
+- **Alternatives:** Markdown cells with typed numbers (simplest, unguarded); a templating step (papermill/Quarto), more machinery for one notebook. `ruff` E501 is relaxed for notebooks only (`pyproject.toml`), because the formatter cannot wrap prose inside f-strings.
+- **Status:** proposed (PR: stage 4 analysis notebook).
+
+## D-034 — Owner-occupier group income is built in the notebook
+- **Decision:** The owner-occupier sensitivity for groups (G4, Rest of Randstad provinces, Rest of NL) uses the owner-occupier-household-weighted mean of the municipal owner-occupier medians (`staging.stg_cbs__household_income`, `household_group = 'owner_occupier'`); NL uses the published median. The same validation as D-016 runs first: over all municipalities the approximation is +0.38 … +0.65 % from the published NL owner-occupier median (limit 2 %), and the notebook asserts it.
+- **Rationale:** Same method as the main group income (D-016), so the two PTIs differ only in the income definition. It is a sensitivity, not a reported metric, so it stays in the analysis layer rather than in `fct_group_affordability`.
+- **Alternatives:** weight by all households (wrong weight for an owner-only median); add owner columns to the mart (move there if Power BI needs them).
+- **Status:** proposed (PR: stage 4 analysis notebook).
+
+## D-035 — Rank changes on a fixed panel; persistence as Spearman rank correlation
+- **Decision:** Rank *changes* between two years are computed on the panel of municipalities ranked (D-009) in both years, re-ranked within that panel. Persistence of the ranking = Spearman rank correlation (Pearson correlation of ranks; no scipy dependency).
+- **Rationale:** The ranked set changes over time (Laren and Blaricum pass 5 000 households after 2011), so a rank out of 316 and a rank out of 323 are not comparable. Spearman needs no assumption about the PTI distribution and answers "is the order the same?".
+- **Alternatives:** compare raw `pti_rank_desc` across years (mixes set changes into rank changes); percentile ranks (comparable across set sizes, but harder to read than "rank 5 of 316").
+- **Status:** proposed (PR: stage 4 analysis notebook).
+
+## D-036 — Robustness verdict rule
+- **Decision:** Each claim is re-measured under each check and classified: **holds** = same direction and at least half the size; **weaker** = same direction, less than half the size; **reverses** = opposite direction. Threshold-type claims state their own rule (share of suburbs in the top 25 ≥ 50 %; Spearman ≥ 0.7 holds, ≥ 0.5 weaker; ≥ 3 of 4 G4 cities in the least-affordable third). Section 4 shows all results in one matrix; every *weaker* / *reverses* result is named in the finding text.
+- **Rationale:** A fixed, written rule stops the analyst from calling a halved effect "robust". 50 % is a judgement call, stated openly; the raw baseline and variant values are shown next to every verdict so a reader can apply another threshold.
+- **Alternatives:** statistical significance tests (the data are a full population of municipalities, not a sample; a p-value answers a different question); free-text robustness notes (not comparable across findings).
+- **Status:** proposed (PR: stage 4 analysis notebook).
+
+## D-037 — Sub-period break points come from the data
+- **Decision:** Section 3 splits 2011–2024 at the national PTI low before the peak (2013), the peak of the G4 / Rest of NL PTI ratio (2019) and the national PTI peak (2022), all computed with `idxmin` / `idxmax`.
+- **Rationale:** Periods picked by eye invite the question "why those years?"; data-driven break points have a one-line answer and move automatically if the data change.
+- **Alternatives:** fixed calendar periods (e.g. 5-year blocks), which cut through turning points; external events (rate changes) — no rate data in the project yet (D-013).
+- **Status:** proposed (PR: stage 4 analysis notebook).

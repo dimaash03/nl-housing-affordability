@@ -1,7 +1,7 @@
 # Project status
 
-**Last updated:** 2026-11-27
-**Current stage:** 3. Marts (star schema) — complete (PR #11 merged); review follow-ups in PR #12; next 4. analysis notebook + 5. Power BI
+**Last updated:** 2026-11-28
+**Current stage:** 4. Analysis notebook — built (PR: stage 4 analysis notebook, awaiting owner review); next 5. Power BI
 
 Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star schema) → 4. Analysis (notebooks) → 5. Power BI dashboard → 6. Write-up (README insights, limitations).
 
@@ -26,15 +26,22 @@ Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star
   missing step; Python ≥ 3.11 / DuckDB ≥ 2.0.1 (D-032); `loopback` pytest marker; GitHub Actions CI (3.11 lower
   bounds + 3.13 locked, geo extras, no skips) and a manual full-pipeline job; `make build`, `make reproduce`.
   Verified from a fresh download: 12 models, 21/21 checks, 174 tests (Python 3.13 locked and 3.11 lower bounds).
+  PR #12 merged.
+- 2026-11-28 (stage 4): `notebooks/01_affordability_findings.ipynb`, committed with outputs; charts in `docs/figures/`.
+  Sections: 0 setup + sanity asserts, 1 PTI by group, 2 least/most affordable municipalities and rank change,
+  3 price vs income growth (nominal, real, sub-periods, municipalities), 4 robustness matrix, 5 limitations.
+  3 findings, 9 claims, 32 checks: 27 hold, 4 weaker, 1 reverses. Findings are rendered from code and guarded by
+  asserts (D-033); owner-occupier group income (D-034), rank panel + Spearman (D-035), verdict rule (D-036),
+  data-driven sub-periods (D-037). Owner decided on 2026-11-28 that Claude writes the findings; the owner reviews them
+  and explains them back before merging.
 
 ## Next steps (towards the dashboard)
-1. Owner reviews PR #12 (decide D-030, D-031, D-032; D-029 status), merges, then
-   `git pull && make setup && make build && make test`.
-2. Stage 4 analysis notebook `notebooks/01_affordability_findings.ipynb`: 3–5 checked findings, each with a
-   sensitivity check (owner-occupier income, 2024 instead of 2025*, real vs nominal, quality-adjusted index for
-   G4/provinces, rank stability without low-reliability municipalities) and the PTI limitations.
+1. Owner reviews the stage 4 PR: read the three findings, answer the reviewer questions in the PR in own words,
+   decide D-033…D-037, merge, then `git pull && make setup && make build` and *Run All* on the Mac.
+2. Business question 4 (mortgage-rate scenarios and upfront-cost saving years, D-013): not in notebook 01;
+   proposed as a short `notebooks/02_mortgage_scenarios.ipynb` — owner to decide.
 3. Stage 5 Power BI: import the Parquet files, star schema, DAX measures, 4 pages (KPI overview, map,
-   G4 vs regions, municipality detail).
+   G4 vs regions, municipality detail). The owner-occupier PTI and the rank panel are candidates for DAX measures.
 4. Public one-page case-study site (GitHub Pages) at the end.
 
 ## Open items
@@ -42,7 +49,7 @@ Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star
 - Owner: `make lock` on the Mac (P-6: the lock was generated on Linux / Python 3.13).
 - PDOK licence (D-014) — confirm before committing the boundary file.
 - Historical mortgage-rate series (D-013, stretch) — owner downloads from DNB manually.
-- End of project: "defend your decisions" walkthrough of D-001…D-032 with the owner.
+- End of project: "defend your decisions" walkthrough of D-001…D-037 with the owner.
 
 ## Key facts (do not re-derive)
 - Years covered: 2011–2025 (set in `config/cbs_tables.yaml` `project:`); 2025 income preliminary (`Perioden.Status = 'Voorlopig'`).
