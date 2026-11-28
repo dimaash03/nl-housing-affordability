@@ -5,6 +5,8 @@
 --   - residual groups must have positive transaction counts
 --   - G4 + Rest of NL transactions = NL; G4 + Rest of Randstad + Rest of NL (3-way) = NL
 --   - G4 / Rest of NL price recombined with the counts gives back the NL price (catches a wrong residual)
+--   - owner-occupier income (D-034, D-038): present for every group-year, and the owner-occupier households
+--     of the two-way and three-way splits add up to the same total
 with
 
 grain as (
@@ -42,6 +44,15 @@ recombined as (
     where nl.group_type = 'nl'
 ),
 
+owner_households as (
+    select
+        year,
+        sum(case when group_type = 'region_group'   then owner_households_count end)  as n_two_way,
+        sum(case when group_type = 'region_group_3' then owner_households_count end)  as n_three_way
+    from marts.fct_group_affordability
+    group by year
+),
+
 issues as (
     select 'row count <> 18 x n_years' as issue, n_rows::varchar as detail from grain
     where n_rows <> 18 * (select year_to - year_from + 1 from reference.project_settings)
@@ -68,6 +79,14 @@ issues as (
     select 'G4 + Rest of NL price does not recombine to NL', year::varchar
     from recombined
     where abs(price_two_way - price_nl) > 0.01
+    union all
+    select 'missing owner-occupier income or households', group_type || ' ' || group_code || ' ' || year
+    from marts.fct_group_affordability
+    where median_disposable_income_owner_eur is null or owner_households_count is null
+    union all
+    select 'owner-occupier households of the two splits differ', year::varchar
+    from owner_households
+    where n_two_way <> n_three_way
 )
 
 select * from issues

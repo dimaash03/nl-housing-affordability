@@ -13,7 +13,8 @@
 --   - Almere (GM0034, Flevoland) is in Rest of NL (documented D-010 limitation)
 --   - group sizes in the 2026 division: 4 / 116 / 222 municipalities
 --   - fct_group_affordability: the method labels say which aggregates are approximations
---     (income of G4 / Rest groups = household-weighted mean of municipal medians), and the household
+--     (income of G4 / Rest groups = household-weighted mean of municipal medians; owner-occupier income of
+--     G4 / Rest groups = owner-household-weighted mean, D-034), and the household
 --     counts of the two-way and three-way splits add up to the municipal total of the same year
 
 with
@@ -123,6 +124,9 @@ issues as (
            and (income_method <> 'household_weighted_median'
                 or price_method <> case group_code when 'G4' then 'transaction_weighted' else 'exact_residual' end))
        or is_income_approximated <> (income_method = 'household_weighted_median')
+       or (group_type in ('nl', 'province') and income_owner_method <> 'cbs_published')
+       or (group_type in ('region_group', 'region_group_3')
+           and income_owner_method <> 'owner_household_weighted_median')
     union all
     select 'group households do not add up to the municipal total', m.year::varchar
     from municipal_households as m

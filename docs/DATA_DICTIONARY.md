@@ -127,7 +127,7 @@ All amounts in euro after unit conversion. `y` = year, `m` = municipality (2026 
 | `avg_sale_price_eur` | `GemiddeldeVerkoopprijs_1`, harmonised to 2026 boundaries (section 4) | Mean price of transacted homes, not quality-adjusted. |
 | `median_disposable_income_eur` | `MediaanBesteedbaarInkomen_6 * 1000`, Populatie `3000870`, Kenmerk `1050010` | **Primary income measure** (D-003). |
 | `median_disposable_income_owner_eur` | same, Kenmerk `1014800` | **Mandatory sensitivity**: income of current owner-occupiers. |
-| **`price_to_income_ratio`** (PTI) | `avg_sale_price_eur / median_disposable_income_eur` | **Primary affordability metric.** "Years of median household disposable income needed to buy the average home." Higher = less affordable. Level is inflated by the mean/median mix — compare changes and ranks (D-004). |
+| **`price_to_income_ratio`** (PTI) | `avg_sale_price_eur / median_disposable_income_eur` | **Primary affordability metric.** Average sale price relative to the median income of *all* resident households (renters included); a relative index, not "years of income needed to buy" (D-038). Higher = less affordable. Level is inflated by the mean/median mix — compare changes and ranks (D-004). |
 | `price_to_income_owner_ratio` | `avg_sale_price_eur / median_disposable_income_owner_eur` | Less sensitive to the share of renters, singles and students. |
 | `cpi_2025_index` | `CPI_1` (yearly average, 2025 = 100) | Kept in the fact so any amount can be deflated in DAX. |
 | `real_avg_sale_price_eur_2025` | `avg_sale_price_eur * 100 / cpi_2025_index` | In 2025 euro. |
@@ -135,6 +135,8 @@ All amounts in euro after unit conversion. `y` = year, `m` = municipality (2026 
 | `price_growth_since_2011_pct`, `income_growth_since_2011_pct` | `(x_y / x_2011 - 1) * 100`, nominal in the fact | Base year 2011 = first year with income (D-008). Real variants are computed from the `real_*` columns in the analysis layer / DAX (D-027). |
 | `growth_gap_pp` | `price_growth_since_2011_pct - income_growth_since_2011_pct` | Where prices outpaced incomes (Q3). |
 | `pti_rank_desc` | rank of `price_to_income_ratio` within year, 1 = least affordable, among rows without `low_reliability` / `income_missing` | Ranking shifts (Q2); flagged rows get `null` (D-009). |
+| `pti_owner_rank_desc` | rank of `price_to_income_owner_ratio` within year, 1 = least affordable, on the same rows as `pti_rank_desc` | Second rank for the dashboard tooltip and switch (D-038). |
+| `owner_households_count` | private households with Kenmerk `1014800` (owner-occupiers), `ParticuliereHuishoudens_1 * 1000` | Weight of the owner-occupier group income (D-034); numerator of the owner-occupier share. |
 | `region_group` | `G4` if `m` in {GM0363, GM0599, GM0518, GM0344}; otherwise `Rest of NL` | Primary split (D-010). |
 | `region_group_3` | `G4` / `Rest of Randstad provinces` (PV26, PV27, PV28 excl. G4) / `Rest of NL` | Secondary split (D-010). |
 | `urbanity_class` | `86247NED` `Code_54` (1 = very strongly urban … 5 = not urban) | "Randstad vs big-city effect" lens. |
@@ -148,6 +150,8 @@ All amounts in euro after unit conversion. `y` = year, `m` = municipality (2026 
 | G4 combined | transaction-weighted (`85792NED.VerkochteWoningen_4`) | household-weighted mean of medians *(approx.)* |
 | Rest of NL | `(p_NL * n_NL - sum_g p_g * n_g) / (n_NL - sum_g n_g)` — exact | household-weighted mean of medians *(approx.)* |
 | Rest of Randstad provinces | `(sum_PV26-28 p * n - sum_g p_g * n_g) / (sum n - sum n_g)` — exact (D-029) | household-weighted mean of medians *(approx.)* |
+
+Owner-occupier income per group (D-034, D-038): published CBS owner-occupier median for NL and provinces; for the G4 and Rest groups the owner-occupier-household-weighted mean of municipal owner-occupier medians (`income_owner_method`). Columns `median_disposable_income_owner_eur`, `price_to_income_owner_ratio`, `owner_households_count`; validated within 2 % of the NL owner-occupier median (`assert_owner_income_weighted_median_vs_nl`). `group_name_sort` gives each group name one sort value for Power BI.
 
 Built in `marts.fct_group_affordability` (group_type × group_code × year, 270 rows); `price_method` / `income_method`
 say which rule produced each value, and `is_income_approximated = true` marks every row whose income is the
