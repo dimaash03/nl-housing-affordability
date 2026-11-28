@@ -1,7 +1,7 @@
 # Project status
 
 **Last updated:** 2026-11-28
-**Current stage:** 4. Analysis notebook — merged (PR #13); EDA review follow-ups in PR (fix/eda-review-2026-11-28); next 5. Power BI
+**Current stage:** 4. Analysis notebook — merged (PR #13, EDA review follow-ups PR #14); next 5. Power BI (in progress, PR #15)
 
 Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star schema) → 4. Analysis (notebooks) → 5. Power BI dashboard → 6. Write-up (README insights, limitations).
 
@@ -45,11 +45,13 @@ Stages: 1. Scoping / data sourcing → 2. Ingestion & staging → 3. Marts (star
   D-038 proposed (income basis on the dashboard). Verified: `make clean-data && make reproduce && make notebook`
   → 21/21 checks, notebook runs, `docs/KEY_FINDINGS.md` byte-identical; two consecutive runs give a byte-identical
   notebook; lint clean; 170 tests (CI pipeline job also compares every text output of the re-executed notebook).
+  Merged as PR #14 on 2026-11-28.
 
 ## Next steps (towards the dashboard)
-1. Owner reviews the EDA follow-up PR, decides D-038 (dashboard default income basis; owner-occupier group income
-   into `fct_group_affordability`), runs `make notebook` on the Mac and confirms `git diff` is empty, merges.
-   Teach-back of the 7 reviewer questions of PR #13 still open (question 1 explained 2026-11-28).
+1. EDA follow-ups merged (PR #14, 2026-11-28). Still open: D-038 (dashboard default income basis; owner-occupier
+   group income into `fct_group_affordability`), handled in the stage 5 PR #15; owner runs `make notebook` on the Mac
+   and confirms `git diff` is empty. Teach-back of the 7 reviewer questions of PR #13 still open (question 1
+   explained 2026-11-28).
 2. Business question 4 (mortgage-rate scenarios and upfront-cost saving years, D-013): not in notebook 01;
    proposed as a short `notebooks/02_mortgage_scenarios.ipynb` — owner to decide.
 3. Stage 5 Power BI: import the Parquet files, star schema, DAX measures, 4 pages (KPI overview, map,
