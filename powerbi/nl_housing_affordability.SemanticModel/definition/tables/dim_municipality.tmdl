@@ -1,0 +1,158 @@
+/// The 342 municipalities of 1 Jan 2026 (86247NED): province, COROP, region groups (D-010).
+table dim_municipality
+	lineageTag: bc8e67ab-92ce-5def-b5db-03a62ed52b6b
+
+	column municipality_code
+		dataType: string
+		lineageTag: 6ff702fc-328d-5b5a-bc82-515f8ebdacdb
+		summarizeBy: none
+		sourceColumn: municipality_code
+
+		annotation SummarizationSetBy = User
+
+	column municipality_name
+		dataType: string
+		lineageTag: ee12c042-400d-59d4-bf65-dac0d2a16cad
+		summarizeBy: none
+		sourceColumn: municipality_name
+
+		annotation SummarizationSetBy = User
+
+	column province_code
+		dataType: string
+		lineageTag: bdb59dc3-480b-5595-9f93-f1838dabd66c
+		summarizeBy: none
+		sourceColumn: province_code
+
+		annotation SummarizationSetBy = User
+
+	column province_name
+		dataType: string
+		lineageTag: 5a50445c-1b04-5aa4-ba36-18538adc5cfd
+		summarizeBy: none
+		sourceColumn: province_name
+
+		annotation SummarizationSetBy = User
+
+	column corop_code
+		dataType: string
+		lineageTag: f99d92c0-9e18-58f0-85a9-56ceeb40286d
+		summarizeBy: none
+		sourceColumn: corop_code
+
+		annotation SummarizationSetBy = User
+
+	column corop_name
+		dataType: string
+		lineageTag: c7ea268a-5438-54ac-81f8-8e8e3abb2006
+		summarizeBy: none
+		sourceColumn: corop_name
+
+		annotation SummarizationSetBy = User
+
+	column is_g4
+		dataType: boolean
+		lineageTag: 8e11cac9-2697-55b3-8f32-e23f12e1dfcc
+		summarizeBy: none
+		sourceColumn: is_g4
+
+		annotation SummarizationSetBy = User
+
+	column region_group
+		dataType: string
+		lineageTag: 7fbb8032-9b27-5631-9f2f-72a52bf3e815
+		summarizeBy: none
+		sourceColumn: region_group
+
+		annotation SummarizationSetBy = User
+
+	column region_group_3
+		dataType: string
+		lineageTag: 67b2f367-85ac-52a2-a1c9-2adf0a533f2c
+		summarizeBy: none
+		sourceColumn: region_group_3
+		sortByColumn: region_group_3_sort
+
+		annotation SummarizationSetBy = User
+
+	column region_group_3_sort
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 8fdfdb68-2290-5c88-bec0-9cca265d5c58
+		summarizeBy: none
+		sourceColumn: region_group_3_sort
+
+		annotation SummarizationSetBy = User
+
+	column g4_sort_order
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 81bb9699-d8e1-5f5a-9ba0-b50a3b075964
+		summarizeBy: none
+		sourceColumn: g4_sort_order
+
+		annotation SummarizationSetBy = User
+
+	column urbanity_class
+		dataType: int64
+		formatString: 0
+		lineageTag: a2d336f4-5ecb-5b03-bf50-9dfee15f9177
+		summarizeBy: none
+		sourceColumn: urbanity_class
+
+		annotation SummarizationSetBy = User
+
+	column urbanity_class_label_nl
+		dataType: string
+		lineageTag: 72b64513-bd38-5ed7-b6f4-8516155438d2
+		summarizeBy: none
+		sourceColumn: urbanity_class_label_nl
+
+		annotation SummarizationSetBy = User
+
+	column urbanity_class_label_en
+		dataType: string
+		lineageTag: 153722ea-73fc-5eef-a9ef-dd733d3cec38
+		summarizeBy: none
+		sourceColumn: urbanity_class_label_en
+
+		annotation SummarizationSetBy = User
+
+	column size_class_code
+		dataType: int64
+		formatString: 0
+		lineageTag: 11c66945-8974-521a-bfd5-cc13cc922cc8
+		summarizeBy: none
+		sourceColumn: size_class_code
+
+		annotation SummarizationSetBy = User
+
+	column size_class_label_nl
+		dataType: string
+		lineageTag: 99ee5f1c-f4a4-5f40-80a1-d069a2aa57f4
+		summarizeBy: none
+		sourceColumn: size_class_label_nl
+
+		annotation SummarizationSetBy = User
+
+	column population_2026
+		dataType: int64
+		formatString: #,0
+		lineageTag: 24484186-13f8-5cbe-9a92-5b6a79275f15
+		summarizeBy: none
+		sourceColumn: population_2026
+
+		annotation SummarizationSetBy = User
+
+	partition dim_municipality = m
+		mode: import
+		source =
+				let
+				    Folder = Text.TrimEnd(MartsFolder, {"\", "/"}),
+				    Source = Parquet.Document(File.Contents(Folder & "\dim_municipality.parquet"))
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

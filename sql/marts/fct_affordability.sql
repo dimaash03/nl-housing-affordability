@@ -128,6 +128,9 @@ income as (
         max(case when household_group = 'owner_occupier'
                  then median_disposable_income_eur end)                             as median_disposable_income_owner_eur,
         max(case when household_group = 'all' then households_count end)            as households_count,
+        -- owner-occupier households: weight of the owner-occupier group income (D-034) and the numerator of
+        -- the owner-occupier share on the dashboard (D-038)
+        max(case when household_group = 'owner_occupier' then households_count end) as owner_households_count,
         bool_or(is_preliminary)                                                     as is_preliminary
     from staging.stg_cbs__household_income
     where region_type = 'GM'
@@ -164,6 +167,7 @@ joined as (
         i.median_disposable_income_eur,
         i.median_disposable_income_owner_eur,
         i.households_count,
+        i.owner_households_count,
         i.is_preliminary,
         c.cpi_2025_index
     from spine as s
@@ -217,7 +221,17 @@ ranked as (
                              (not low_reliability and not income_missing and price_to_income_ratio is not null)
                 order by price_to_income_ratio desc
             )
-        end                                                          as pti_rank_desc  -- 1 = least affordable
+        end                                                          as pti_rank_desc,  -- 1 = least affordable
+        -- Same eligibility (D-009: household count and all-household income), ranked by the owner-occupier PTI,
+        -- so both ranks cover the same set of municipalities and can be compared (D-038).
+        case
+            when not low_reliability and not income_missing and price_to_income_owner_ratio is not null
+            then rank() over (
+                partition by year,
+                             (not low_reliability and not income_missing and price_to_income_owner_ratio is not null)
+                order by price_to_income_owner_ratio desc
+            )
+        end                                                          as pti_owner_rank_desc
     from flags
 )
 
@@ -228,6 +242,7 @@ select
     median_disposable_income_eur,
     median_disposable_income_owner_eur,
     households_count,
+    owner_households_count,
     price_to_income_ratio,
     price_to_income_owner_ratio,
     cpi_2025_index,
@@ -237,6 +252,7 @@ select
     income_growth_since_2011_pct,
     growth_gap_pp,
     pti_rank_desc,
+    pti_owner_rank_desc,
     is_preliminary,
     is_harmonised,
     low_reliability,

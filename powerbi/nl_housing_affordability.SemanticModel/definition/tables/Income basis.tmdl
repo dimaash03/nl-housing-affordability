@@ -1,0 +1,49 @@
+/// Disconnected switch table (D-038, D-039): one slicer on this table drives every PTI, income, rank and growth measure. Use a single-select slicer; no selection = All households.
+table 'Income basis'
+	lineageTag: 39426441-6903-5a69-be8d-5ed714771a9f
+
+	column basis_key
+		dataType: string
+		isHidden
+		lineageTag: f4ff15a7-99ab-558a-8290-a2811a050f27
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [basis_key]
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Income basis'
+		dataType: string
+		lineageTag: b36d75f2-4585-569e-893b-a92cda23e22f
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Income basis]
+		sortByColumn: basis_sort
+
+		annotation SummarizationSetBy = Automatic
+
+	column basis_sort
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 11b3a954-7518-5c2c-8e43-93a7aa7cf498
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [basis_sort]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Income basis' = calculated
+		mode: import
+		source = ```
+				DATATABLE (
+				    "basis_key", STRING,
+				    "Income basis", STRING,
+				    "basis_sort", INTEGER,
+				    {
+				        { "all", "All households", 1 },
+				        { "owner", "Owner-occupiers", 2 }
+				    }
+				)
+				```
+

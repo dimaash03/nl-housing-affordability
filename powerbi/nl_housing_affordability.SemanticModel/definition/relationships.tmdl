@@ -1,0 +1,16 @@
+relationship a4edced3-9f84-5911-882e-0da2587f49ac
+	fromColumn: fct_affordability.municipality_code
+	toColumn: dim_municipality.municipality_code
+
+relationship ef626fa9-334d-594c-bcb5-cb5ac7075383
+	fromColumn: fct_affordability.year
+	toColumn: dim_year.year
+
+relationship 35493180-61ed-585f-98f8-b3735663c478
+	fromColumn: fct_group_affordability.year
+	toColumn: dim_year.year
+
+relationship e154694b-1836-58d3-8355-5ee3b40e3615
+	fromColumn: dim_municipality.province_code
+	toColumn: dim_province.province_code
+

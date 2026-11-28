@@ -1,0 +1,6 @@
+/// Folder with the Parquet files written by `make export` (data/processed/marts), as the Windows VM sees it. Change it in Power BI: Transform data > Edit parameters.
+expression MartsFolder = "\\Mac\Home\Documents\nl house affordability\data\processed\marts" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 17fdbfcd-2a1e-5a8d-9b4d-c69253032920
+
+	annotation PBI_ResultType = Text
+

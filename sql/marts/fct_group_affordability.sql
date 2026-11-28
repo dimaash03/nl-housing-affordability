@@ -22,6 +22,11 @@
 --   Territory: 85792NED reports each year in that year's boundaries, so the G4 price excludes Weesp
 --          before 2022 (Weesp sits in Rest of NL / Rest of Randstad provinces until it joined Amsterdam).
 --          Group incomes use the 2026 division. Documented as a limitation (Weesp < 0.2 % of households).
+--   D-034 / D-038  Owner-occupier income (the mandatory sensitivity, D-003) is built the same way as the main
+--          income: published CBS owner-occupier median for NL and provinces; otherwise the mean of municipal
+--          owner-occupier medians weighted by owner-occupier households (approximation, bounded by
+--          assert_owner_income_weighted_median_vs_nl.sql). Moved here from the notebook for the dashboard's
+--          income-basis switch.
 
 with
 
@@ -195,6 +200,61 @@ incomes as (
     group by all
 ),
 
+-- 3b. Owner-occupier group incomes (D-034, D-038). Separate from `incomes` so that a municipality with an
+--     owner-occupier median but no all-household median (or the reverse) is weighted on its own basis.
+municipal_owner_income as (
+    select
+        f.year,
+        f.median_disposable_income_owner_eur,
+        f.owner_households_count,
+        d.region_group,
+        d.region_group_3
+    from marts.fct_affordability as f
+    join marts.dim_municipality as d using (municipality_code)
+    where f.median_disposable_income_owner_eur is not null
+      and f.owner_households_count is not null
+),
+
+owner_incomes as (
+    select
+        case when region_type = 'NL' then 'nl' else 'province' end  as group_type,
+        region_code                                                  as group_code,
+        year,
+        median_disposable_income_eur                                 as median_disposable_income_owner_eur,
+        households_count                                             as owner_households_count,
+        'cbs_published'                                              as income_owner_method
+    from staging.stg_cbs__household_income
+    where region_type in ('NL', 'PV')
+      and household_group = 'owner_occupier'
+      and year in (select year from years)
+
+    union all
+    select
+        'region_group',
+        case region_group when 'G4' then 'G4' else 'REST_NL' end,
+        year,
+        sum(median_disposable_income_owner_eur * owner_households_count) / sum(owner_households_count),
+        sum(owner_households_count),
+        'owner_household_weighted_median'
+    from municipal_owner_income
+    group by all
+
+    union all
+    select
+        'region_group_3',
+        case region_group_3
+            when 'G4' then 'G4'
+            when 'Rest of Randstad provinces' then 'REST_RANDSTAD'
+            else 'REST_NL'
+        end,
+        year,
+        sum(median_disposable_income_owner_eur * owner_households_count) / sum(owner_households_count),
+        sum(owner_households_count),
+        'owner_household_weighted_median'
+    from municipal_owner_income
+    group by all
+),
+
 -- 4. Names and sort order of the groups (provinces from dim_province).
 groups as (
     select 'nl' as group_type, 'NL01' as group_code, 'Netherlands' as group_name, 0 as group_sort
@@ -226,6 +286,9 @@ joined as (
         i.income_method,
         i.households_count,
         coalesce(i.is_preliminary, false)   as is_preliminary,
+        o.median_disposable_income_owner_eur,
+        o.owner_households_count,
+        o.income_owner_method,
         c.cpi_2025_index
     from groups as g
     cross join years as y
@@ -235,6 +298,8 @@ joined as (
         on t.group_type = g.group_type and t.group_code = g.group_code and t.year = y.year
     left join incomes as i
         on i.group_type = g.group_type and i.group_code = g.group_code and i.year = y.year
+    left join owner_incomes as o
+        on o.group_type = g.group_type and o.group_code = g.group_code and o.year = y.year
     left join staging.stg_cbs__cpi as c
         on c.year = y.year
 ),
@@ -243,6 +308,7 @@ metrics as (
     select
         *,
         avg_sale_price_eur / median_disposable_income_eur                          as price_to_income_ratio,
+        avg_sale_price_eur / median_disposable_income_owner_eur                    as price_to_income_owner_ratio,
         avg_sale_price_eur * 100 / cpi_2025_index                                  as real_avg_sale_price_eur_2025,
         median_disposable_income_eur * 100 / cpi_2025_index                        as real_median_disposable_income_eur_2025,
         (avg_sale_price_eur
@@ -259,12 +325,22 @@ select
     group_code,
     group_name,
     group_sort,
+    -- one sort value per group_name (group_sort repeats 'Rest of NL' as 2 and 3), so Power BI can use it as
+    -- the sort-by column of group_name: Netherlands, G4, Rest of Randstad provinces, Rest of NL, provinces
+    case
+        when group_type = 'nl'       then 0
+        when group_type = 'province' then 10 + group_sort
+        else case group_code when 'G4' then 1 when 'REST_RANDSTAD' then 2 else 3 end
+    end::integer                                                as group_name_sort,
     year,
     avg_sale_price_eur,
     median_disposable_income_eur,
     price_to_income_ratio,
+    median_disposable_income_owner_eur,
+    price_to_income_owner_ratio,
     transactions_count,
     households_count,
+    owner_households_count,
     cpi_2025_index,
     real_avg_sale_price_eur_2025,
     real_median_disposable_income_eur_2025,
@@ -276,6 +352,7 @@ select
     -- true where the group income is the household-weighted mean of municipal medians (G4 / Rest groups),
     -- not a published CBS median; bounded at NL level by assert_income_weighted_median_vs_nl.sql (D-016)
     income_method <> 'cbs_published'                            as is_income_approximated,
+    income_owner_method,
     is_preliminary
 from metrics
 order by group_type, group_sort, year

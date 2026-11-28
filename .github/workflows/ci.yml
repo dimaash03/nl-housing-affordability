@@ -58,7 +58,8 @@ jobs:
           if grep -q "SKIPPED" pytest.log; then echo "::error::tests were skipped"; exit 1; fi
 
   pipeline:
-    # Full reproduction from CBS: ingest -> load -> transform -> check -> export -> notebook. Manual only.
+    # Full reproduction from CBS: ingest -> load -> transform -> check -> export -> check-powerbi -> notebook.
+    # Manual only.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -81,6 +82,13 @@ jobs:
           git status --short
           if ! git diff --exit-code -- docs/KEY_FINDINGS.md README.md; then
             echo "::error::Fresh CBS data changed the key findings: re-run 'make notebook' locally and commit the result"
+            exit 1
+          fi
+      - name: Power BI control values must match the committed ones
+        run: |
+          .venv/bin/python -m nl_housing.powerbi expected
+          if ! git diff --exit-code -- powerbi/CHECKS.md; then
+            echo "::error::Fresh CBS data changed the Power BI control values: run 'python -m nl_housing.powerbi expected' and commit"
             exit 1
           fi
       - name: Upload the executed notebook and figures
