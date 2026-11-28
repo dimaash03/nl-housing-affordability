@@ -2,7 +2,7 @@ PYTHON ?= python3
 VENV   := .venv
 BIN    := $(VENV)/bin
 
-.PHONY: setup setup-locked lock ingest load transform check export build reproduce test lint format clean-data help
+.PHONY: setup setup-locked lock ingest load transform check export build reproduce notebook test lint format clean-data help
 
 # Extra pytest arguments, e.g. in a sandbox that blocks local sockets:  make test PYTEST_ARGS='-m "not loopback"'
 PYTEST_ARGS ?=
@@ -63,6 +63,11 @@ build:  ## load -> transform -> check -> export (data/raw/ must already be downl
 reproduce:  ## Full run from an empty data/ folder: ingest + build (needs internet for CBS)
 	$(MAKE) ingest
 	$(MAKE) build
+
+notebook:  ## Run the analysis notebook top to bottom in place (asserts, figures, README key findings); stop open kernels first
+	$(BIN)/jupyter nbconvert --to notebook --execute --inplace \
+		--ExecutePreprocessor.timeout=600 --ExecutePreprocessor.record_timing=False \
+		notebooks/01_affordability_findings.ipynb
 
 test:  ## Run the offline unit tests (PYTEST_ARGS=... for extra pytest options)
 	$(BIN)/python -m pytest $(PYTEST_ARGS)
