@@ -31,6 +31,11 @@ src = ["src", "tests"]
 # E/W pycodestyle, F pyflakes, I isort, B bugbear, UP pyupgrade, N pep8-naming, SIM simplify
 select = ["E", "W", "F", "I", "B", "UP", "N", "SIM"]
 
+[tool.ruff.lint.per-file-ignores]
+# Findings in the analysis notebooks are prose rendered from f-strings (numbers stay live); the formatter cannot
+# wrap text inside a string, so the line-length rule is relaxed there. Code cells are still formatted by ruff.
+"notebooks/*.ipynb" = ["E501"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["nl_housing"]
 known-local-folder = ["conftest", "geo_fixtures"]
