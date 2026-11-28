@@ -1,0 +1,245 @@
+/// Group x year (NL, provinces, G4 / Rest of NL, three-way split). Group PTI = group price / group income, never an average of municipal ratios (D-016). Filter group_type in every visual.
+table fct_group_affordability
+	lineageTag: e02641cf-9808-5ef3-a584-6902c0abbba7
+
+	/// nl / province / region_group (G4 vs Rest of NL) / region_group_3 (three-way split).
+	column group_type
+		dataType: string
+		lineageTag: 64826ffd-0f1a-5f95-9462-7adb2f1b8328
+		summarizeBy: none
+		sourceColumn: group_type
+
+		annotation SummarizationSetBy = User
+
+	column group_code
+		dataType: string
+		lineageTag: b26a8be5-f10e-5711-b69b-05f0349d2738
+		summarizeBy: none
+		sourceColumn: group_code
+
+		annotation SummarizationSetBy = User
+
+	column group_name
+		dataType: string
+		lineageTag: ac20bba7-bc75-5f42-a3e1-56078341ce42
+		summarizeBy: none
+		sourceColumn: group_name
+		sortByColumn: group_name_sort
+
+		annotation SummarizationSetBy = User
+
+	column group_sort
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 97e41e69-1dfe-547a-a8d7-c3a4d77b003c
+		summarizeBy: none
+		sourceColumn: group_sort
+
+		annotation SummarizationSetBy = User
+
+	column group_name_sort
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: ff20e645-cf5d-579c-85fe-64cf8abba492
+		summarizeBy: none
+		sourceColumn: group_name_sort
+
+		annotation SummarizationSetBy = User
+
+	column year
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: de859500-2f10-55b9-a48c-0d046d0f9b4b
+		summarizeBy: none
+		sourceColumn: year
+
+		annotation SummarizationSetBy = User
+
+	/// Average sale price of existing homes (83625NED), EUR, in 2026 boundaries (D-007).
+	column avg_sale_price_eur
+		dataType: double
+		formatString: #,0
+		lineageTag: 8d12ca22-e6ed-57dd-8487-d4407d519f88
+		summarizeBy: none
+		sourceColumn: avg_sale_price_eur
+
+		annotation SummarizationSetBy = User
+
+	/// Median disposable income of all private households excl. students (86380NED), EUR (D-003).
+	column median_disposable_income_eur
+		dataType: double
+		formatString: #,0
+		lineageTag: 389cf5ff-2f45-54e5-bb84-8f6eba6806b8
+		summarizeBy: none
+		sourceColumn: median_disposable_income_eur
+
+		annotation SummarizationSetBy = User
+
+	/// Average sale price / median disposable income of all households; a relative index (D-038).
+	column price_to_income_ratio
+		dataType: double
+		formatString: 0.00
+		lineageTag: 16cc1c92-6cb2-57e8-95a1-bf21681bf895
+		summarizeBy: none
+		sourceColumn: price_to_income_ratio
+
+		annotation SummarizationSetBy = User
+
+	/// Median disposable income of owner-occupier households (86380NED), EUR.
+	column median_disposable_income_owner_eur
+		dataType: double
+		formatString: #,0
+		lineageTag: d357c7ae-78b0-5074-b011-b11808c8f182
+		summarizeBy: none
+		sourceColumn: median_disposable_income_owner_eur
+
+		annotation SummarizationSetBy = User
+
+	/// Average sale price / median disposable income of owner-occupier households.
+	column price_to_income_owner_ratio
+		dataType: double
+		formatString: 0.00
+		lineageTag: 3c296da4-0d74-5948-b3d9-333fdf71b13c
+		summarizeBy: none
+		sourceColumn: price_to_income_owner_ratio
+
+		annotation SummarizationSetBy = User
+
+	column transactions_count
+		dataType: double
+		formatString: #,0
+		lineageTag: 3fcd7134-95ad-5ed8-a1ff-2041fb347fab
+		summarizeBy: none
+		sourceColumn: transactions_count
+
+		annotation SummarizationSetBy = User
+
+	/// Private households (all), the weight of the group income (D-016).
+	column households_count
+		dataType: double
+		formatString: #,0
+		lineageTag: 5b059aa8-61e9-5733-bbaf-201af7162395
+		summarizeBy: none
+		sourceColumn: households_count
+
+		annotation SummarizationSetBy = User
+
+	/// Owner-occupier households, the weight of the owner-occupier group income (D-034).
+	column owner_households_count
+		dataType: double
+		formatString: #,0
+		lineageTag: 6563bc01-7b6d-50fb-a53c-c029bb66666f
+		summarizeBy: none
+		sourceColumn: owner_households_count
+
+		annotation SummarizationSetBy = User
+
+	column cpi_2025_index
+		dataType: double
+		formatString: 0.0
+		lineageTag: 0e9319aa-e3f8-5e27-b763-2dbe75460182
+		summarizeBy: none
+		sourceColumn: cpi_2025_index
+
+		annotation SummarizationSetBy = User
+
+	column real_avg_sale_price_eur_2025
+		dataType: double
+		formatString: #,0
+		lineageTag: 13e61454-2467-549a-9dc3-6990b4bf63a1
+		summarizeBy: none
+		sourceColumn: real_avg_sale_price_eur_2025
+
+		annotation SummarizationSetBy = User
+
+	column real_median_disposable_income_eur_2025
+		dataType: double
+		formatString: #,0
+		lineageTag: 4e82a81b-719f-5cba-bc83-6aadd0f53390
+		summarizeBy: none
+		sourceColumn: real_median_disposable_income_eur_2025
+
+		annotation SummarizationSetBy = User
+
+	column price_growth_since_2011_pct
+		dataType: double
+		formatString: 0.0
+		lineageTag: 7e502b33-ffe5-5114-9132-5fc5878e50c1
+		summarizeBy: none
+		sourceColumn: price_growth_since_2011_pct
+
+		annotation SummarizationSetBy = User
+
+	column income_growth_since_2011_pct
+		dataType: double
+		formatString: 0.0
+		lineageTag: 1a8c30da-088c-5a23-a19a-bfede795ac88
+		summarizeBy: none
+		sourceColumn: income_growth_since_2011_pct
+
+		annotation SummarizationSetBy = User
+
+	column growth_gap_pp
+		dataType: double
+		formatString: 0.0
+		lineageTag: 2151551c-e924-5863-a0fa-3d84ec2e8c7d
+		summarizeBy: none
+		sourceColumn: growth_gap_pp
+
+		annotation SummarizationSetBy = User
+
+	column price_method
+		dataType: string
+		lineageTag: fd93a087-5fa7-5ba7-9268-a01203fd3468
+		summarizeBy: none
+		sourceColumn: price_method
+
+		annotation SummarizationSetBy = User
+
+	column income_method
+		dataType: string
+		lineageTag: 296df41e-7ae0-5fda-a2ce-aff97de6fc06
+		summarizeBy: none
+		sourceColumn: income_method
+
+		annotation SummarizationSetBy = User
+
+	/// Group income is the household-weighted mean of municipal medians, not a published median (D-016).
+	column is_income_approximated
+		dataType: boolean
+		lineageTag: b631a592-7c98-5399-b09d-68fca157db2f
+		summarizeBy: none
+		sourceColumn: is_income_approximated
+
+		annotation SummarizationSetBy = User
+
+	column income_owner_method
+		dataType: string
+		lineageTag: 9b61bbd6-0a1e-5960-8d0e-b8758b2a4ef2
+		summarizeBy: none
+		sourceColumn: income_owner_method
+
+		annotation SummarizationSetBy = User
+
+	/// Income is preliminary (CBS period status), currently 2025.
+	column is_preliminary
+		dataType: boolean
+		lineageTag: 0f79ac6a-d9f1-5c5e-bbb3-8ca0167fc5c1
+		summarizeBy: none
+		sourceColumn: is_preliminary
+
+		annotation SummarizationSetBy = User
+
+	partition fct_group_affordability = m
+		mode: import
+		source =
+				let
+				    Folder = Text.TrimEnd(MartsFolder, {"\", "/"}),
+				    Source = Parquet.Document(File.Contents(Folder & "\fct_group_affordability.parquet"))
+				in
+				    Source
+
+	annotation PBI_ResultType = Table

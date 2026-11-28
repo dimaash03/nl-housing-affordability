@@ -1,0 +1,703 @@
+/// Measures only (D-039). Display folders: 0 Context, 1 Municipality, 2 Rank, 3 Group, 4 Headline, 9 Checks.
+table _Measures
+	lineageTag: 2994603a-afa3-5fc8-89c6-7fd10d15702e
+
+	/// Active income basis from the 'Income basis' slicer: all (default) or owner.
+	measure 'Income basis key' = ```
+			SELECTEDVALUE ( 'Income basis'[basis_key], "all" )
+			```
+		displayFolder: 0 Context
+		lineageTag: 8dcb8b22-1fea-547c-b076-14466d85e41d
+
+	/// Active income basis as text, for subtitles.
+	measure 'Income basis label' = ```
+			SELECTEDVALUE ( 'Income basis'[Income basis], "All households" )
+			```
+		displayFolder: 0 Context
+		lineageTag: 5ba3b86e-8e79-567e-81da-2b6ce2060c84
+
+	/// Latest year with final (not preliminary) income: the default headline year (D-030).
+	measure 'Latest final year' = ```
+			CALCULATE (
+			    MAX ( dim_year[year] ),
+			    REMOVEFILTERS ( dim_year ),
+			    dim_year[is_latest_final_year] = TRUE ()
+			)
+			```
+		formatString: 0
+		displayFolder: 0 Context
+		lineageTag: 83250551-66a7-5d74-b19f-fd94d78e063e
+
+	/// First analysis year, the base of every growth figure (D-008).
+	measure 'Base year' = ```
+			CALCULATE (
+			    MIN ( dim_year[year] ),
+			    REMOVEFILTERS ( dim_year ),
+			    dim_year[years_since_base] = 0
+			)
+			```
+		formatString: 0
+		displayFolder: 0 Context
+		lineageTag: 121cb008-c4de-53cd-acd4-9d68cd4a01d6
+
+	/// Year the measures show: the latest filtered year (slicer, axis), or the latest final year when no year is filtered.
+	measure 'Report year' = ```
+			IF ( ISFILTERED ( dim_year ), MAX ( dim_year[year] ), [Latest final year] )
+			```
+		formatString: 0
+		displayFolder: 0 Context
+		lineageTag: 1bf87d6d-bc95-5ce9-a77e-1b893540af00
+
+	/// Report year as text, with * when its income is preliminary.
+	measure 'Report year label' = ```
+			VAR y = [Report year]
+			RETURN
+			    CALCULATE ( SELECTEDVALUE ( dim_year[year_label] ), REMOVEFILTERS ( dim_year ), dim_year[year] = y )
+			```
+		displayFolder: 0 Context
+		lineageTag: cfea39bb-cb78-545c-bef2-779066fae765
+
+	/// Subtitle for every PTI visual (D-038): the definition, the active income basis and the year.
+	measure 'PTI subtitle' = ```
+			"Average sale price ÷ median disposable income of "
+			    & IF ( [Income basis key] = "owner", "owner-occupier households", "all households" )
+			    & " · " & [Report year label]
+			```
+		displayFolder: 0 Context
+		lineageTag: a478a897-cbec-563d-89b8-daa656a8d2d4
+
+	/// Footnote text when the report year has preliminary income; empty otherwise.
+	measure 'Preliminary note' = ```
+			VAR y = [Report year]
+			VAR isPreliminary =
+			    CALCULATE ( SELECTEDVALUE ( dim_year[is_preliminary] ), REMOVEFILTERS ( dim_year ), dim_year[year] = y )
+			RETURN
+			    IF (
+			        isPreliminary,
+			        "* Preliminary CBS income; headline figures use " & [Latest final year] & ".",
+			        ""
+			    )
+			```
+		displayFolder: 0 Context
+		lineageTag: e5baf268-7e06-569a-843b-191dd6a7df08
+
+	/// Price-to-income ratio of one municipality in the report year, on the active income basis. Blank above municipality level: ratios do not add up (use the Group measures).
+	measure PTI = ```
+			VAR y = [Report year]
+			VAR useOwner = [Income basis key] = "owner"
+			RETURN
+			    CALCULATE (
+			        IF (
+			            COUNTROWS ( fct_affordability ) = 1,
+			            IF (
+			                useOwner,
+			                SELECTEDVALUE ( fct_affordability[price_to_income_owner_ratio] ),
+			                SELECTEDVALUE ( fct_affordability[price_to_income_ratio] )
+			            )
+			        ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y
+			    )
+			```
+		formatString: 0.00
+		displayFolder: 1 Municipality
+		lineageTag: c637a916-c9ac-59f1-8411-ceac8f36185b
+
+	/// PTI with all-household income, whatever the slicer says.
+	measure 'PTI (all households)' = ```
+			CALCULATE ( [PTI], REMOVEFILTERS ( 'Income basis' ), 'Income basis'[basis_key] = "all" )
+			```
+		formatString: 0.00
+		displayFolder: 1 Municipality
+		lineageTag: 33c4d4cd-ed81-5ae0-ba7a-b1f24a2d53cc
+
+	/// PTI with owner-occupier income, whatever the slicer says.
+	measure 'PTI (owner-occupiers)' = ```
+			CALCULATE ( [PTI], REMOVEFILTERS ( 'Income basis' ), 'Income basis'[basis_key] = "owner" )
+			```
+		formatString: 0.00
+		displayFolder: 1 Municipality
+		lineageTag: c62be111-a430-5e93-b6ac-2a9b11e8c896
+
+	/// PTI of the municipality in the base year.
+	measure 'PTI base year' = ```
+			VAR y0 = [Base year]
+			RETURN
+			    CALCULATE ( [PTI], REMOVEFILTERS ( dim_year ), dim_year[year] = y0 )
+			```
+		formatString: 0.00
+		displayFolder: 1 Municipality
+		lineageTag: 07691f4e-9920-5ab3-80c1-e65eb2941dce
+
+	/// Report-year PTI minus base-year PTI (PTI points).
+	measure 'PTI change since base year' = ```
+			VAR ptiNow = [PTI]
+			VAR ptiBase = [PTI base year]
+			RETURN
+			    IF ( NOT ISBLANK ( ptiNow ) && NOT ISBLANK ( ptiBase ), ptiNow - ptiBase )
+			```
+		formatString: +0.00;-0.00;0.00
+		displayFolder: 1 Municipality
+		lineageTag: 82a57c2f-c331-51fc-9c22-bf53a6f8810c
+
+	/// Average sale price of existing homes in the report year (EUR).
+	measure 'Avg sale price' = ```
+			VAR y = [Report year]
+			RETURN
+			    CALCULATE (
+			        IF ( COUNTROWS ( fct_affordability ) = 1, SELECTEDVALUE ( fct_affordability[avg_sale_price_eur] ) ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y
+			    )
+			```
+		formatString: € #,0
+		displayFolder: 1 Municipality
+		lineageTag: fe4392e0-0484-5b48-b53e-6d5c5b99612f
+
+	/// Median disposable household income in the report year on the active income basis (EUR).
+	measure 'Median income' = ```
+			VAR y = [Report year]
+			VAR useOwner = [Income basis key] = "owner"
+			RETURN
+			    CALCULATE (
+			        IF (
+			            COUNTROWS ( fct_affordability ) = 1,
+			            IF (
+			                useOwner,
+			                SELECTEDVALUE ( fct_affordability[median_disposable_income_owner_eur] ),
+			                SELECTEDVALUE ( fct_affordability[median_disposable_income_eur] )
+			            )
+			        ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y
+			    )
+			```
+		formatString: € #,0
+		displayFolder: 1 Municipality
+		lineageTag: 91ebcc19-484f-5891-b488-80c2d2aedf47
+
+	/// Nominal change of the average sale price, base year to report year.
+	measure 'Price growth since base year' = ```
+			VAR y0 = [Base year]
+			VAR priceNow = [Avg sale price]
+			VAR priceBase = CALCULATE ( [Avg sale price], REMOVEFILTERS ( dim_year ), dim_year[year] = y0 )
+			RETURN
+			    IF ( NOT ISBLANK ( priceNow ) && NOT ISBLANK ( priceBase ), DIVIDE ( priceNow, priceBase ) - 1 )
+			```
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: 1 Municipality
+		lineageTag: ea5ac36a-671d-5559-a397-344e201a9628
+
+	/// Nominal change of the median income (active basis), base year to report year.
+	measure 'Income growth since base year' = ```
+			VAR y0 = [Base year]
+			VAR incomeNow = [Median income]
+			VAR incomeBase = CALCULATE ( [Median income], REMOVEFILTERS ( dim_year ), dim_year[year] = y0 )
+			RETURN
+			    IF ( NOT ISBLANK ( incomeNow ) && NOT ISBLANK ( incomeBase ), DIVIDE ( incomeNow, incomeBase ) - 1 )
+			```
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: 1 Municipality
+		lineageTag: bea7e78c-05cb-53be-9415-701086692d1e
+
+	/// Price growth minus income growth since the base year, in percentage points (Q3). Positive = prices outgrew incomes.
+	measure 'Growth gap (pp)' = ```
+			VAR priceGrowth = [Price growth since base year]
+			VAR incomeGrowth = [Income growth since base year]
+			RETURN
+			    IF ( NOT ISBLANK ( priceGrowth ) && NOT ISBLANK ( incomeGrowth ), ( priceGrowth - incomeGrowth ) * 100 )
+			```
+		formatString: +0.0 "pp";-0.0 "pp";0.0 "pp"
+		displayFolder: 1 Municipality
+		lineageTag: acd7aab6-8739-5989-b070-c88f56e0a922
+
+	/// Owner-occupier households / all households in the report year.
+	measure 'Owner-occupier share' = ```
+			VAR y = [Report year]
+			RETURN
+			    CALCULATE (
+			        IF (
+			            COUNTROWS ( fct_affordability ) = 1,
+			            DIVIDE (
+			                SELECTEDVALUE ( fct_affordability[owner_households_count] ),
+			                SELECTEDVALUE ( fct_affordability[households_count] )
+			            )
+			        ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y
+			    )
+			```
+		formatString: 0%
+		displayFolder: 1 Municipality
+		lineageTag: c3bbcb5f-f38f-5605-924b-2e725549f299
+
+	/// Rank of the municipality in the report year on the active income basis, 1 = least affordable; blank if not ranked (D-009).
+	measure 'PTI rank' = ```
+			VAR y = [Report year]
+			VAR useOwner = [Income basis key] = "owner"
+			RETURN
+			    CALCULATE (
+			        IF (
+			            COUNTROWS ( fct_affordability ) = 1,
+			            IF (
+			                useOwner,
+			                SELECTEDVALUE ( fct_affordability[pti_owner_rank_desc] ),
+			                SELECTEDVALUE ( fct_affordability[pti_rank_desc] )
+			            )
+			        ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y
+			    )
+			```
+		formatString: 0
+		displayFolder: 2 Rank
+		lineageTag: 405ff98d-606b-57e5-ae52-2366b892b3bb
+
+	/// Rank by all-household PTI, whatever the slicer says (tooltip, D-038).
+	measure 'PTI rank (all households)' = ```
+			CALCULATE ( [PTI rank], REMOVEFILTERS ( 'Income basis' ), 'Income basis'[basis_key] = "all" )
+			```
+		formatString: 0
+		displayFolder: 2 Rank
+		lineageTag: 2cd0be10-16c3-5359-8837-24478334250e
+
+	/// Rank by owner-occupier PTI, whatever the slicer says (tooltip, D-038).
+	measure 'PTI rank (owner-occupiers)' = ```
+			CALCULATE ( [PTI rank], REMOVEFILTERS ( 'Income basis' ), 'Income basis'[basis_key] = "owner" )
+			```
+		formatString: 0
+		displayFolder: 2 Rank
+		lineageTag: 61aa3cd1-7e33-52b7-9879-9a0e4817b90c
+
+	/// Number of ranked municipalities in the report year (the N in 'rank r of N').
+	measure 'Ranked municipalities' = ```
+			VAR y = [Report year]
+			VAR useOwner = [Income basis key] = "owner"
+			RETURN
+			    CALCULATE (
+			        IF (
+			            useOwner,
+			            COUNT ( fct_affordability[pti_owner_rank_desc] ),
+			            COUNT ( fct_affordability[pti_rank_desc] )
+			        ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y,
+			        REMOVEFILTERS ( dim_municipality ),
+			        REMOVEFILTERS ( dim_province )
+			    )
+			```
+		formatString: 0
+		displayFolder: 2 Rank
+		lineageTag: 0567685c-69bd-51df-9bef-1402be184b09
+
+	/// 'r of N' for one municipality, or why it has no rank.
+	measure 'PTI rank label' = ```
+			VAR y = [Report year]
+			VAR r = [PTI rank]
+			VAR isSmall =
+			    CALCULATE (
+			        SELECTEDVALUE ( fct_affordability[low_reliability] ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y
+			    )
+			RETURN
+			    IF (
+			        HASONEVALUE ( dim_municipality[municipality_code] ),
+			        IF (
+			            NOT ISBLANK ( r ),
+			            FORMAT ( r, "0" ) & " of " & FORMAT ( [Ranked municipalities], "0" ),
+			            IF ( isSmall, "not ranked: fewer than 5 000 households", "not ranked: no PTI" )
+			        )
+			    )
+			```
+		displayFolder: 2 Rank
+		lineageTag: 0b317131-4686-59bf-9749-9f7a2abd9ea0
+
+	/// Places moved up the least-affordable ranking between the base year and the report year (positive = relatively less affordable). Ranks are recomputed on the municipalities ranked in both years (D-035), on the active income basis.
+	measure 'PTI rank change since base year' = ```
+			VAR municipality = SELECTEDVALUE ( dim_municipality[municipality_code] )
+			VAR y0 = [Base year]
+			VAR y1 = [Report year]
+			VAR useOwner = [Income basis key] = "owner"
+			VAR factRows =
+			    CALCULATETABLE (
+			        SELECTCOLUMNS (
+			            fct_affordability,
+			            "@code", fct_affordability[municipality_code],
+			            "@year", fct_affordability[year],
+			            "@rank", IF ( useOwner, fct_affordability[pti_owner_rank_desc], fct_affordability[pti_rank_desc] ),
+			            "@pti", IF ( useOwner, fct_affordability[price_to_income_owner_ratio], fct_affordability[price_to_income_ratio] )
+			        ),
+			        REMOVEFILTERS ( dim_municipality ),
+			        REMOVEFILTERS ( dim_province ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] IN { y0, y1 }
+			    )
+			VAR ranked0 = FILTER ( factRows, [@year] = y0 && NOT ISBLANK ( [@rank] ) )
+			VAR ranked1 = FILTER ( factRows, [@year] = y1 && NOT ISBLANK ( [@rank] ) )
+			VAR panelCodes =
+			    INTERSECT ( SELECTCOLUMNS ( ranked0, "@c", [@code] ), SELECTCOLUMNS ( ranked1, "@c", [@code] ) )
+			VAR panel0 = FILTER ( ranked0, [@code] IN panelCodes )
+			VAR panel1 = FILTER ( ranked1, [@code] IN panelCodes )
+			VAR pti0 = MAXX ( FILTER ( panel0, [@code] = municipality ), [@pti] )
+			VAR pti1 = MAXX ( FILTER ( panel1, [@code] = municipality ), [@pti] )
+			VAR rank0 = COUNTROWS ( FILTER ( panel0, [@pti] > pti0 ) ) + 1
+			VAR rank1 = COUNTROWS ( FILTER ( panel1, [@pti] > pti1 ) ) + 1
+			RETURN
+			    IF ( NOT ISBLANK ( pti0 ) && NOT ISBLANK ( pti1 ) && y1 <> y0, rank0 - rank1 )
+			```
+		formatString: +0;-0;0
+		displayFolder: 2 Rank
+		lineageTag: 7b846bd4-232f-5da7-9170-4f036195b7f5
+
+	/// PTI of one group (row of fct_group_affordability) in the report year on the active income basis. Filter group_type in the visual.
+	measure 'Group PTI' = ```
+			VAR y = [Report year]
+			VAR useOwner = [Income basis key] = "owner"
+			RETURN
+			    CALCULATE (
+			        IF (
+			            COUNTROWS ( fct_group_affordability ) = 1,
+			            IF (
+			                useOwner,
+			                SELECTEDVALUE ( fct_group_affordability[price_to_income_owner_ratio] ),
+			                SELECTEDVALUE ( fct_group_affordability[price_to_income_ratio] )
+			            )
+			        ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y
+			    )
+			```
+		formatString: 0.00
+		displayFolder: 3 Group
+		lineageTag: 40cd3cf4-c9d5-5aed-8e8a-78bedbc03f74
+
+	/// Group PTI in the base year.
+	measure 'Group PTI base year' = ```
+			VAR y0 = [Base year]
+			RETURN
+			    CALCULATE ( [Group PTI], REMOVEFILTERS ( dim_year ), dim_year[year] = y0 )
+			```
+		formatString: 0.00
+		displayFolder: 3 Group
+		lineageTag: 49f137bd-f965-51d5-8a40-021871722c66
+
+	/// Relative change of the group PTI, base year to report year.
+	measure 'Group PTI change since base year' = ```
+			VAR ptiNow = [Group PTI]
+			VAR ptiBase = [Group PTI base year]
+			RETURN
+			    IF ( NOT ISBLANK ( ptiNow ) && NOT ISBLANK ( ptiBase ), DIVIDE ( ptiNow, ptiBase ) - 1 )
+			```
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: 3 Group
+		lineageTag: 9d67fb84-754e-5fe7-9931-e02686bc343d
+
+	/// Group average sale price in the report year (EUR; D-016, D-029 methods).
+	measure 'Group avg sale price' = ```
+			VAR y = [Report year]
+			RETURN
+			    CALCULATE (
+			        IF ( COUNTROWS ( fct_group_affordability ) = 1, SELECTEDVALUE ( fct_group_affordability[avg_sale_price_eur] ) ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y
+			    )
+			```
+		formatString: € #,0
+		displayFolder: 3 Group
+		lineageTag: faf80739-73e1-5017-b5ea-3713367d9be7
+
+	/// Group median income in the report year on the active income basis (EUR).
+	measure 'Group median income' = ```
+			VAR y = [Report year]
+			VAR useOwner = [Income basis key] = "owner"
+			RETURN
+			    CALCULATE (
+			        IF (
+			            COUNTROWS ( fct_group_affordability ) = 1,
+			            IF (
+			                useOwner,
+			                SELECTEDVALUE ( fct_group_affordability[median_disposable_income_owner_eur] ),
+			                SELECTEDVALUE ( fct_group_affordability[median_disposable_income_eur] )
+			            )
+			        ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y
+			    )
+			```
+		formatString: € #,0
+		displayFolder: 3 Group
+		lineageTag: 896a35cd-5c70-5e89-9417-fb019c7e5f85
+
+	/// Nominal change of the group price, base year to report year.
+	measure 'Group price growth since base year' = ```
+			VAR y0 = [Base year]
+			VAR priceNow = [Group avg sale price]
+			VAR priceBase = CALCULATE ( [Group avg sale price], REMOVEFILTERS ( dim_year ), dim_year[year] = y0 )
+			RETURN
+			    IF ( NOT ISBLANK ( priceNow ) && NOT ISBLANK ( priceBase ), DIVIDE ( priceNow, priceBase ) - 1 )
+			```
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: 3 Group
+		lineageTag: 680cdf93-aaab-51fa-84f6-0c37a70ba7cc
+
+	/// Nominal change of the group income on the active basis, base year to report year.
+	measure 'Group income growth since base year' = ```
+			VAR y0 = [Base year]
+			VAR incomeNow = [Group median income]
+			VAR incomeBase = CALCULATE ( [Group median income], REMOVEFILTERS ( dim_year ), dim_year[year] = y0 )
+			RETURN
+			    IF ( NOT ISBLANK ( incomeNow ) && NOT ISBLANK ( incomeBase ), DIVIDE ( incomeNow, incomeBase ) - 1 )
+			```
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: 3 Group
+		lineageTag: ebeabf36-2071-51d4-8dec-64fc735957f6
+
+	/// Group price growth minus group income growth since the base year (percentage points).
+	measure 'Group growth gap (pp)' = ```
+			VAR priceGrowth = [Group price growth since base year]
+			VAR incomeGrowth = [Group income growth since base year]
+			RETURN
+			    IF ( NOT ISBLANK ( priceGrowth ) && NOT ISBLANK ( incomeGrowth ), ( priceGrowth - incomeGrowth ) * 100 )
+			```
+		formatString: +0.0 "pp";-0.0 "pp";0.0 "pp"
+		displayFolder: 3 Group
+		lineageTag: 135a41c7-647f-505b-a21a-f3da2fe5a140
+
+	/// Nominal group price, base year = 100 (for price-vs-income lines).
+	measure 'Group price index (base = 100)' = ```
+			VAR y0 = [Base year]
+			VAR base = CALCULATE ( [Group avg sale price], REMOVEFILTERS ( dim_year ), dim_year[year] = y0 )
+			RETURN
+			    DIVIDE ( [Group avg sale price], base ) * 100
+			```
+		formatString: 0
+		displayFolder: 3 Group
+		lineageTag: 552f7ef7-3d53-5ec0-9004-399a8d913b71
+
+	/// Nominal group income on the active basis, base year = 100.
+	measure 'Group income index (base = 100)' = ```
+			VAR y0 = [Base year]
+			VAR base = CALCULATE ( [Group median income], REMOVEFILTERS ( dim_year ), dim_year[year] = y0 )
+			RETURN
+			    DIVIDE ( [Group median income], base ) * 100
+			```
+		formatString: 0
+		displayFolder: 3 Group
+		lineageTag: 16d9fd9e-5361-52d2-856a-9ecde703d697
+
+	/// Change of the group price in 2025 euro (CPI-deflated), base year to report year.
+	measure 'Group real price growth since base year' = ```
+			VAR y = [Report year]
+			VAR y0 = [Base year]
+			VAR realPrice =
+			    CALCULATE (
+			        IF ( COUNTROWS ( fct_group_affordability ) = 1, SELECTEDVALUE ( fct_group_affordability[real_avg_sale_price_eur_2025] ) ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y
+			    )
+			VAR realBase =
+			    CALCULATE (
+			        IF ( COUNTROWS ( fct_group_affordability ) = 1, SELECTEDVALUE ( fct_group_affordability[real_avg_sale_price_eur_2025] ) ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y0
+			    )
+			RETURN
+			    IF ( NOT ISBLANK ( realPrice ) && NOT ISBLANK ( realBase ), DIVIDE ( realPrice, realBase ) - 1 )
+			```
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: 3 Group
+		lineageTag: 63b133b0-9145-53f7-9cba-0912fd2f80c3
+
+	/// Owner-occupier households / all households of the group in the report year (context card, D-038).
+	measure 'Group owner-occupier share' = ```
+			VAR y = [Report year]
+			RETURN
+			    CALCULATE (
+			        IF (
+			            COUNTROWS ( fct_group_affordability ) = 1,
+			            DIVIDE (
+			                SELECTEDVALUE ( fct_group_affordability[owner_households_count] ),
+			                SELECTEDVALUE ( fct_group_affordability[households_count] )
+			            )
+			        ),
+			        REMOVEFILTERS ( dim_year ),
+			        dim_year[year] = y
+			    )
+			```
+		formatString: 0%
+		displayFolder: 3 Group
+		lineageTag: 833c88a0-fb40-5a6a-9a46-6bf3a68b0bf6
+
+	/// National PTI (published CBS price and income).
+	measure 'PTI Netherlands' = ```
+			CALCULATE (
+			    [Group PTI],
+			    REMOVEFILTERS ( fct_group_affordability ),
+			    fct_group_affordability[group_type] = "nl"
+			)
+			```
+		formatString: 0.00
+		displayFolder: 4 Headline
+		lineageTag: fdd40dbb-faf7-5734-ae0a-b4c06b547bb5
+
+	/// PTI of the four big cities combined.
+	measure 'PTI G4' = ```
+			CALCULATE (
+			    [Group PTI],
+			    REMOVEFILTERS ( fct_group_affordability ),
+			    fct_group_affordability[group_type] = "region_group",
+			    fct_group_affordability[group_code] = "G4"
+			)
+			```
+		formatString: 0.00
+		displayFolder: 4 Headline
+		lineageTag: 28b19398-166b-5ed1-99f6-5ce202a2bc53
+
+	/// PTI of all municipalities outside the G4 (two-way split).
+	measure 'PTI Rest of NL' = ```
+			CALCULATE (
+			    [Group PTI],
+			    REMOVEFILTERS ( fct_group_affordability ),
+			    fct_group_affordability[group_type] = "region_group",
+			    fct_group_affordability[group_code] = "REST_NL"
+			)
+			```
+		formatString: 0.00
+		displayFolder: 4 Headline
+		lineageTag: 7b1742bd-8339-53d0-ace6-718b1001b86d
+
+	/// PTI of Utrecht, Noord-Holland and Zuid-Holland outside the G4 (three-way split).
+	measure 'PTI Rest of Randstad provinces' = ```
+			CALCULATE (
+			    [Group PTI],
+			    REMOVEFILTERS ( fct_group_affordability ),
+			    fct_group_affordability[group_type] = "region_group_3",
+			    fct_group_affordability[group_code] = "REST_RANDSTAD"
+			)
+			```
+		formatString: 0.00
+		displayFolder: 4 Headline
+		lineageTag: 135f4100-0368-5041-b160-21128983d3a5
+
+	/// Relative change of the national PTI since the base year.
+	measure 'PTI change Netherlands' = ```
+			CALCULATE (
+			    [Group PTI change since base year],
+			    REMOVEFILTERS ( fct_group_affordability ),
+			    fct_group_affordability[group_type] = "nl"
+			)
+			```
+		formatString: +0.0%;-0.0%;0.0%
+		displayFolder: 4 Headline
+		lineageTag: 8fb38832-8bc5-5831-858d-959c97bad57e
+
+	/// Owner-occupier share of households in the G4.
+	measure 'Owner-occupier share G4' = ```
+			CALCULATE (
+			    [Group owner-occupier share],
+			    REMOVEFILTERS ( fct_group_affordability ),
+			    fct_group_affordability[group_type] = "region_group",
+			    fct_group_affordability[group_code] = "G4"
+			)
+			```
+		formatString: 0%
+		displayFolder: 4 Headline
+		lineageTag: 70fed3ed-7e25-5b8e-b0dc-ccaf71fd7a0e
+
+	/// Owner-occupier share of households outside the G4.
+	measure 'Owner-occupier share Rest of NL' = ```
+			CALCULATE (
+			    [Group owner-occupier share],
+			    REMOVEFILTERS ( fct_group_affordability ),
+			    fct_group_affordability[group_type] = "region_group",
+			    fct_group_affordability[group_code] = "REST_NL"
+			)
+			```
+		formatString: 0%
+		displayFolder: 4 Headline
+		lineageTag: 3d0eb301-9ef9-538b-9a4a-e71695818528
+
+	/// G4 PTI divided by the rest-of-NL PTI on the active income basis (F1).
+	measure 'G4 ÷ Rest of NL' = ```
+			DIVIDE ( [PTI G4], [PTI Rest of NL] )
+			```
+		formatString: 0.00"×"
+		displayFolder: 4 Headline
+		lineageTag: c4d4c96a-45a0-511c-9289-2514ea7e1bed
+
+	/// G4 ÷ Rest of NL with all-household income, whatever the slicer says (D-038: shown next to the owner version).
+	measure 'G4 ÷ Rest of NL (all households)' = ```
+			CALCULATE ( [G4 ÷ Rest of NL], REMOVEFILTERS ( 'Income basis' ), 'Income basis'[basis_key] = "all" )
+			```
+		formatString: 0.00"×"
+		displayFolder: 4 Headline
+		lineageTag: 92b7d408-917e-5af4-a562-74923fa21717
+
+	/// G4 ÷ Rest of NL with owner-occupier income, whatever the slicer says.
+	measure 'G4 ÷ Rest of NL (owner-occupiers)' = ```
+			CALCULATE ( [G4 ÷ Rest of NL], REMOVEFILTERS ( 'Income basis' ), 'Income basis'[basis_key] = "owner" )
+			```
+		formatString: 0.00"×"
+		displayFolder: 4 Headline
+		lineageTag: 68a17d72-0aa8-500e-9cba-fc5d23a56259
+
+	/// Municipalities (in the current filter) with a positive growth gap since the base year, as a share of those with a gap (F3).
+	measure 'Share of municipalities where prices outgrew incomes' = ```
+			VAR gaps =
+			    FILTER (
+			        ADDCOLUMNS ( VALUES ( dim_municipality[municipality_code] ), "@gap", [Growth gap (pp)] ),
+			        NOT ISBLANK ( [@gap] )
+			    )
+			RETURN
+			    DIVIDE ( COUNTROWS ( FILTER ( gaps, [@gap] > 0 ) ), COUNTROWS ( gaps ) )
+			```
+		formatString: 0%
+		displayFolder: 4 Headline
+		lineageTag: ae11d192-a5cc-5da4-98b3-2448d107d7f9
+
+	/// OK when the imported tables have the row counts of the marts (stage 3): 5 130 / 270 / 342 / 12 / 15.
+	measure 'Check row counts' = ```
+			VAR nFact = COUNTROWS ( ALL ( fct_affordability ) )
+			VAR nGroup = COUNTROWS ( ALL ( fct_group_affordability ) )
+			VAR nMunicipality = COUNTROWS ( ALL ( dim_municipality ) )
+			VAR nProvince = COUNTROWS ( ALL ( dim_province ) )
+			VAR nYear = COUNTROWS ( ALL ( dim_year ) )
+			VAR isOk = nFact = 342 * nYear && nGroup = 18 * nYear && nMunicipality = 342 && nProvince = 12 && nYear = 15
+			RETURN
+			    IF ( isOk, "OK", "CHECK" ) & ": " & nFact & " / " & nGroup & " / " & nMunicipality & " / " & nProvince & " / " & nYear
+			```
+		displayFolder: 9 Checks
+		lineageTag: f7d7438c-5851-55db-be17-e5460e045346
+
+	/// OK when every fact row finds its municipality and year (relationships are complete).
+	measure 'Check orphan keys' = ```
+			VAR orphans =
+			    COUNTROWS (
+			        FILTER (
+			            ALL ( fct_affordability ),
+			            ISBLANK ( RELATED ( dim_municipality[municipality_name] ) ) || ISBLANK ( RELATED ( dim_year[year_label] ) )
+			        )
+			    )
+			    + COUNTROWS ( FILTER ( ALL ( fct_group_affordability ), ISBLANK ( RELATED ( dim_year[year_label] ) ) ) )
+			RETURN
+			    IF ( ISBLANK ( orphans ), "OK: 0 orphan rows", "CHECK: " & orphans & " orphan rows" )
+			```
+		displayFolder: 9 Checks
+		lineageTag: caff3e61-daca-51d0-a6ac-8441e9207a16
+
+	column Value
+		isHidden
+		formatString: 0
+		lineageTag: 692f7829-3b2b-5f0a-aefa-2fa6918d2313
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Value]
+
+		annotation SummarizationSetBy = User
+
+	partition _Measures = calculated
+		mode: import
+		source = ```
+				{0}
+				```

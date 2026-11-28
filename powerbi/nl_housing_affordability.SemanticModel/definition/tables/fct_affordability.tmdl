@@ -1,0 +1,213 @@
+/// Municipality (2026 division) x year: price, income, PTI, growth, ranks and flags.
+table fct_affordability
+	lineageTag: e7cd88c5-f1c1-5b4e-9a8a-b208314096d3
+
+	column municipality_code
+		dataType: string
+		isHidden
+		lineageTag: eecee2d8-57ba-565b-bc1f-032eacca4ea9
+		summarizeBy: none
+		sourceColumn: municipality_code
+
+		annotation SummarizationSetBy = User
+
+	column year
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 5860ba84-eccf-5a57-b063-1dcce3d9528e
+		summarizeBy: none
+		sourceColumn: year
+
+		annotation SummarizationSetBy = User
+
+	/// Average sale price of existing homes (83625NED), EUR, in 2026 boundaries (D-007).
+	column avg_sale_price_eur
+		dataType: double
+		formatString: #,0
+		lineageTag: 768bea01-12e6-5039-ba23-9e6c797780ed
+		summarizeBy: none
+		sourceColumn: avg_sale_price_eur
+
+		annotation SummarizationSetBy = User
+
+	/// Median disposable income of all private households excl. students (86380NED), EUR (D-003).
+	column median_disposable_income_eur
+		dataType: double
+		formatString: #,0
+		lineageTag: 125f6b6f-fe28-5796-89a7-3620d9c55434
+		summarizeBy: none
+		sourceColumn: median_disposable_income_eur
+
+		annotation SummarizationSetBy = User
+
+	/// Median disposable income of owner-occupier households (86380NED), EUR.
+	column median_disposable_income_owner_eur
+		dataType: double
+		formatString: #,0
+		lineageTag: e66152a9-ba64-5fcf-8962-344f2af34cd1
+		summarizeBy: none
+		sourceColumn: median_disposable_income_owner_eur
+
+		annotation SummarizationSetBy = User
+
+	/// Private households (all), the weight of the group income (D-016).
+	column households_count
+		dataType: int64
+		formatString: #,0
+		lineageTag: 5ece2b2e-0b3f-518e-a636-2132ce997c20
+		summarizeBy: none
+		sourceColumn: households_count
+
+		annotation SummarizationSetBy = User
+
+	/// Owner-occupier households, the weight of the owner-occupier group income (D-034).
+	column owner_households_count
+		dataType: int64
+		formatString: #,0
+		lineageTag: 8b4f4c54-1025-58c6-b7b8-0c2f5df82cdc
+		summarizeBy: none
+		sourceColumn: owner_households_count
+
+		annotation SummarizationSetBy = User
+
+	/// Average sale price / median disposable income of all households; a relative index (D-038).
+	column price_to_income_ratio
+		dataType: double
+		formatString: 0.00
+		lineageTag: e00a0c19-33f2-5c44-87e9-61b7bc74944f
+		summarizeBy: none
+		sourceColumn: price_to_income_ratio
+
+		annotation SummarizationSetBy = User
+
+	/// Average sale price / median disposable income of owner-occupier households.
+	column price_to_income_owner_ratio
+		dataType: double
+		formatString: 0.00
+		lineageTag: c41e1bbf-4f83-574e-9d97-cd0ae399a4c4
+		summarizeBy: none
+		sourceColumn: price_to_income_owner_ratio
+
+		annotation SummarizationSetBy = User
+
+	column cpi_2025_index
+		dataType: double
+		formatString: 0.0
+		lineageTag: 18826297-c02e-5bea-96ac-a21b2fa5c815
+		summarizeBy: none
+		sourceColumn: cpi_2025_index
+
+		annotation SummarizationSetBy = User
+
+	column real_avg_sale_price_eur_2025
+		dataType: double
+		formatString: #,0
+		lineageTag: 69542535-9703-50b2-a214-fbabbf48df52
+		summarizeBy: none
+		sourceColumn: real_avg_sale_price_eur_2025
+
+		annotation SummarizationSetBy = User
+
+	column real_median_disposable_income_eur_2025
+		dataType: double
+		formatString: #,0
+		lineageTag: ffa30192-4630-58a5-b0e1-f908b7bbdf23
+		summarizeBy: none
+		sourceColumn: real_median_disposable_income_eur_2025
+
+		annotation SummarizationSetBy = User
+
+	column price_growth_since_2011_pct
+		dataType: double
+		formatString: 0.0
+		lineageTag: eaeec0c1-4f33-5546-a63f-4071044fb6ee
+		summarizeBy: none
+		sourceColumn: price_growth_since_2011_pct
+
+		annotation SummarizationSetBy = User
+
+	column income_growth_since_2011_pct
+		dataType: double
+		formatString: 0.0
+		lineageTag: 1acbf4fc-5368-53c4-b5ef-e11864b815b4
+		summarizeBy: none
+		sourceColumn: income_growth_since_2011_pct
+
+		annotation SummarizationSetBy = User
+
+	column growth_gap_pp
+		dataType: double
+		formatString: 0.0
+		lineageTag: 014de3ad-3b77-5f77-8723-865f2e25ffad
+		summarizeBy: none
+		sourceColumn: growth_gap_pp
+
+		annotation SummarizationSetBy = User
+
+	/// Rank of the all-household PTI within the year, 1 = least affordable; null if not ranked (D-009).
+	column pti_rank_desc
+		dataType: int64
+		formatString: 0
+		lineageTag: dc1bf149-68b2-52dc-8a35-b7227e615028
+		summarizeBy: none
+		sourceColumn: pti_rank_desc
+
+		annotation SummarizationSetBy = User
+
+	/// Rank of the owner-occupier PTI on the same set of municipalities as pti_rank_desc (D-038).
+	column pti_owner_rank_desc
+		dataType: int64
+		formatString: 0
+		lineageTag: edd041a3-e7ea-5604-8046-c4b7f22262e4
+		summarizeBy: none
+		sourceColumn: pti_owner_rank_desc
+
+		annotation SummarizationSetBy = User
+
+	/// Income is preliminary (CBS period status), currently 2025.
+	column is_preliminary
+		dataType: boolean
+		lineageTag: 9fe45d77-b9d2-598f-9d5d-12d1314b8be5
+		summarizeBy: none
+		sourceColumn: is_preliminary
+
+		annotation SummarizationSetBy = User
+
+	/// Price built from more than one historical municipality (merger, D-026).
+	column is_harmonised
+		dataType: boolean
+		lineageTag: f6e902f8-3934-54f9-91eb-20ee30676f39
+		summarizeBy: none
+		sourceColumn: is_harmonised
+
+		annotation SummarizationSetBy = User
+
+	/// Fewer than 5 000 households: PTI shown, but not ranked (D-009).
+	column low_reliability
+		dataType: boolean
+		lineageTag: 8112c412-c9b9-50c7-b4a7-c73b4ccf4410
+		summarizeBy: none
+		sourceColumn: low_reliability
+
+		annotation SummarizationSetBy = User
+
+	/// No income published for this municipality-year.
+	column income_missing
+		dataType: boolean
+		lineageTag: 3af425c2-b911-5b87-be1c-05ac8b70b245
+		summarizeBy: none
+		sourceColumn: income_missing
+
+		annotation SummarizationSetBy = User
+
+	partition fct_affordability = m
+		mode: import
+		source =
+				let
+				    Folder = Text.TrimEnd(MartsFolder, {"\", "/"}),
+				    Source = Parquet.Document(File.Contents(Folder & "\fct_affordability.parquet"))
+				in
+				    Source
+
+	annotation PBI_ResultType = Table
